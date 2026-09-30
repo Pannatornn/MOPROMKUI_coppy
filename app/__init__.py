@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import click
 from flask import Flask, jsonify, render_template
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
@@ -107,9 +107,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         from .models import StaffUser
 
         username = app.config["STAFF_USERNAME"].strip().casefold()
+        plain_password = app.config["STAFF_PASSWORD"]
         password_hash = app.config["STAFF_PASSWORD_HASH"]
         if not password_hash or password_hash.startswith("CHANGE_ME"):
-            password_hash = generate_password_hash(app.config["STAFF_PASSWORD"], method="scrypt")
+            password_hash = generate_password_hash(plain_password, method="scrypt")
         user = db.session.scalar(db.select(StaffUser).where(StaffUser.username == username))
         if user is None:
             db.session.add(
@@ -124,14 +125,20 @@ def create_app(test_config: dict | None = None) -> Flask:
             db.session.commit()
             click.echo(f"Admin user {username} created.")
             return
+        password_changed = bool(plain_password) and not check_password_hash(
+            user.password_hash, plain_password
+        )
+        if password_changed:
+            user.password_hash = password_hash
         active_admin = db.session.scalar(
             db.select(StaffUser).where(StaffUser.role == "admin", StaffUser.is_active.is_(True))
         )
         if active_admin is None:
             user.role = "admin"
             user.is_active = True
+        if password_changed or active_admin is None:
             db.session.commit()
-            click.echo(f"Admin access restored for {username}.")
+            click.echo(f"Admin credentials synchronized for {username}.")
             return
         click.echo("Admin user is ready.")
 

@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
 from app.config import normalize_database_url
@@ -61,6 +61,44 @@ def test_production_plain_staff_password_is_hashed_before_storage(tmp_path):
         assert user is not None
         assert user.password_hash != password
         assert check_password_hash(user.password_hash, password)
+
+
+def test_plain_staff_password_updates_existing_configured_user(tmp_path):
+    old_password = "PreviousPassword2026!"
+    new_password = "UpdatedRenderPassword2026!"
+    app = create_app(
+        {
+            "APP_ENV": "production",
+            "SECRET_KEY": "production-secret-key-that-is-at-least-32-characters",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'existing.sqlite'}",
+            "STAFF_USERNAME": "demo-admin",
+            "STAFF_PASSWORD": new_password,
+            "STAFF_PASSWORD_HASH": "",
+            "RATELIMIT_ENABLED": False,
+        }
+    )
+    with app.app_context():
+        db.create_all()
+        db.session.add(
+            StaffUser(
+                username="demo-admin",
+                display_name="ผู้ดูแลระบบ",
+                password_hash=generate_password_hash(old_password, method="scrypt"),
+                role="admin",
+                is_active=True,
+            )
+        )
+        db.session.commit()
+
+    result = app.test_cli_runner().invoke(args=["ensure-admin"])
+
+    assert result.exit_code == 0
+    assert "credentials synchronized" in result.output
+    with app.app_context():
+        user = db.session.scalar(db.select(StaffUser).where(StaffUser.username == "demo-admin"))
+        assert user is not None
+        assert check_password_hash(user.password_hash, new_password)
+        assert not check_password_hash(user.password_hash, old_password)
 
 
 def test_production_rejects_short_plain_staff_password(tmp_path):
