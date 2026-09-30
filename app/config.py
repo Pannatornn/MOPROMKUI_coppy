@@ -28,6 +28,7 @@ class Config:
     RATELIMIT_HEADERS_ENABLED = True
 
     STAFF_USERNAME = os.getenv("STAFF_USERNAME", "clinic")
+    STAFF_PASSWORD = os.getenv("STAFF_PASSWORD", "")
     STAFF_PASSWORD_HASH = os.getenv("STAFF_PASSWORD_HASH", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-terra")

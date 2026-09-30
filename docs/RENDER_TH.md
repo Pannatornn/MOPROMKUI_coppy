@@ -6,30 +6,16 @@
 
 ## 1. เตรียมโค้ดใน GitHub
 
-ใช้ branch ที่มี `render.yaml` และการเปลี่ยนแปลงชุดนี้ หรือ merge PR นี้เข้า `main` ก่อน จากนั้นไป [Render Dashboard](https://dashboard.render.com/) สมัคร/เข้าสู่ระบบและเชื่อมบัญชี GitHub ที่เข้าถึง `Pannatornn/MOPROMKUI_coppy` ได้
+นำไฟล์ชุดนี้ขึ้น GitHub และตรวจว่า branch ที่จะใช้มี `render.yaml` และการเปลี่ยนแปลงชุดนี้ครบ จากนั้นไป [Render Dashboard](https://dashboard.render.com/) สมัคร/เข้าสู่ระบบและเชื่อมบัญชี GitHub ที่เข้าถึง `Pannatornn/MOPROMKUI_coppy` ได้
 
 หากใช้ ZIP ให้แตกไฟล์และนำไฟล์ภายในโฟลเดอร์ `MOPROMKUI_coppy` ไปไว้ที่ root ของ repository โดยเฉพาะ `render.yaml`, `app/config.py`, `entrypoint.sh` และ `.gitattributes` ไม่วางซ้อนโฟลเดอร์เพิ่มอีกชั้น
 
-## 2. สร้างรหัสผ่านผู้ดูแลบนเครื่องของคุณ
-
-เปิด Terminal ในโฟลเดอร์โปรเจกต์ ใช้ Python 3.12 ขึ้นไป แล้วรัน:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/make_password_hash.py
-```
-
-บน macOS/Linux ใช้ `.venv/bin/python` แทน `.\.venv\Scripts\python.exe`
-
-กรอกรหัสผ่านอย่างน้อย 14 ตัวอักษรสองครั้ง ขณะพิมพ์จะไม่แสดงตัวอักษร เก็บรหัสผ่านไว้สำหรับล็อกอิน แล้วคัดลอกผลลัพธ์ทั้งบรรทัดที่เริ่มด้วย `scrypt:` ไปใช้ในขั้นตอนถัดไป ไม่ต้องส่งรหัสผ่านหรือ hash ในแชต
-
-## 3. สร้าง Blueprint
+## 2. สร้าง Blueprint
 
 1. ใน Render เลือก **New → Blueprint** แล้วเลือก repository นี้
 2. เลือก branch ที่มีไฟล์ชุดนี้ และ Blueprint Path เป็น `render.yaml`
-3. กรอก `STAFF_USERNAME` เช่น `demo-admin` และ `STAFF_PASSWORD_HASH` ที่สร้างไว้
-4. ในช่อง Environment ของ Render วาง hash ตามจริง **ไม่ครอบด้วยเครื่องหมายอัญประกาศ** และต้องมีส่วน `$` ครบ
+3. กรอก `STAFF_USERNAME` เช่น `demo-admin`
+4. กรอก `STAFF_PASSWORD` เป็นรหัสผ่านสำหรับหน้าเจ้าหน้าที่อย่างน้อย 14 ตัวอักษร ระบบจะ hash ก่อนบันทึกลงฐานข้อมูล
 5. ตรวจหน้าสรุปว่าเว็บและฐานข้อมูลเป็นแผน **Free** แล้วกด Deploy Blueprint
 
 `SECRET_KEY` สร้างอัตโนมัติ และ `DATABASE_URL` เชื่อมจากฐานข้อมูลใน Blueprint ไม่ต้องกรอกเอง หาก workspace มีฐานข้อมูลฟรีอยู่แล้ว อาจสร้างอีกไม่ได้ ให้ตรวจข้อจำกัดใน Dashboard ก่อนเลือกแผนอื่น
@@ -71,12 +57,12 @@ python -m venv .venv
 - ใช้ Gunicorn 1 process และ rate limiter ในหน่วยความจำ ตัวนับจะรีเซ็ตเมื่อรีสตาร์ต ถ้าจะเพิ่ม process หรือหลาย instance ต้องเปลี่ยนไปใช้ Redis และติดตั้ง dependency ของ Redis ก่อน
 - `DATA_RETENTION_DAYS=30` เป็นเกณฑ์ให้คำสั่ง `flask --app app:create_app purge-expired` ไม่ใช่ตัวตั้งเวลาลบอัตโนมัติ Blueprint นี้ไม่ได้สร้างงานตามเวลา
 - `init-db` สร้างตารางใหม่ แต่ไม่ย้ายข้อมูลจากเครื่องเดิมและไม่แก้ schema ของตารางเดิม ต้องจัดการ migration แยกเมื่อมีการเปลี่ยน schema
-- `STAFF_PASSWORD_HASH` ใช้สร้างบัญชีครั้งแรก การเปลี่ยนค่านี้หลังบัญชีถูกสร้างแล้วไม่รีเซ็ตรหัสผ่านบัญชีนั้น ให้ใช้หน้า admin จัดการผู้ใช้
+- `STAFF_PASSWORD` ใช้สร้างบัญชีครั้งแรก การเปลี่ยนค่านี้หลังบัญชีถูกสร้างแล้วไม่รีเซ็ตรหัสผ่านบัญชีนั้น ให้ใช้หน้า admin จัดการผู้ใช้
 
 ## เมื่อ deploy ไม่ผ่าน
 
 - `No module named psycopg2` หรือ `Can't load plugin ... postgres`: ตรวจว่า deploy branch ที่แก้ `app/config.py` แล้ว
-- `STAFF_PASSWORD_HASH must be generated`: ใส่ hash ให้ครบและไม่ใช้ `CHANGE_ME`
+- `STAFF_PASSWORD must be at least 14 characters...`: กำหนด `STAFF_PASSWORD` อย่างน้อย 14 ตัวอักษรใน Environment ของ Web Service แล้ว deploy ใหม่
 - `SECRET_KEY must be ...`: ตรวจว่า Blueprint สร้าง `SECRET_KEY` แล้ว
 - `exec ... no such file` หรือ error ที่มี `\r`: ตรวจ `entrypoint.sh` ให้ใช้ LF; `.gitattributes` ในชุดนี้กำหนดไว้แล้ว
 - health check ล้มเหลว: ดู Logs ของเว็บและสถานะฐานข้อมูล ตรวจว่าไม่ได้แทน `DATABASE_URL` ด้วย SQLite หรือ URL ของ Docker ชื่อ `db`

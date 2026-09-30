@@ -19,7 +19,7 @@ services:
           property: connectionString
       - key: STAFF_USERNAME
         sync: false
-      - key: STAFF_PASSWORD_HASH
+      - key: STAFF_PASSWORD
         sync: false
       - key: AI_PROVIDER
         value: stub

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import click
 from flask import Flask, jsonify, render_template
+from werkzeug.security import generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
@@ -19,8 +20,16 @@ def _validate_config(app: Flask) -> None:
     problems = []
     if app.config["SECRET_KEY"] in {"", "dev-only-change-me"} or len(app.config["SECRET_KEY"]) < 32:
         problems.append("SECRET_KEY must be a random value of at least 32 characters")
-    if not app.config["STAFF_PASSWORD_HASH"] or app.config["STAFF_PASSWORD_HASH"].startswith("CHANGE_ME"):
-        problems.append("STAFF_PASSWORD_HASH must be generated")
+    password_hash = app.config["STAFF_PASSWORD_HASH"]
+    password = app.config["STAFF_PASSWORD"]
+    has_password_hash = bool(password_hash) and not password_hash.startswith("CHANGE_ME")
+    has_plain_password = (
+        bool(password) and not password.startswith("CHANGE_ME") and len(password) >= 14
+    )
+    if not has_password_hash and not has_plain_password:
+        problems.append(
+            "STAFF_PASSWORD must be at least 14 characters or STAFF_PASSWORD_HASH must be generated"
+        )
     if "CHANGE_ME" in os.getenv("DATABASE_URL", ""):
         problems.append("DATABASE_URL still contains CHANGE_ME")
     if problems:
@@ -99,6 +108,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
         username = app.config["STAFF_USERNAME"].strip().casefold()
         password_hash = app.config["STAFF_PASSWORD_HASH"]
+        if not password_hash or password_hash.startswith("CHANGE_ME"):
+            password_hash = generate_password_hash(app.config["STAFF_PASSWORD"], method="scrypt")
         user = db.session.scalar(db.select(StaffUser).where(StaffUser.username == username))
         if user is None:
             db.session.add(
