@@ -1,0 +1,45 @@
+# Demo with synthetic data only. Free PostgreSQL expires after 30 days.
+# Follow docs/RENDER_TH.md before creating this Blueprint.
+services:
+  - type: web
+    name: morpromkui-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: morpromkui-demo-db
+          property: connectionString
+      - key: STAFF_USERNAME
+        sync: false
+      - key: STAFF_PASSWORD_HASH
+        sync: false
+      - key: AI_PROVIDER
+        value: stub
+      # One process keeps the in-memory limiter consistent within this demo.
+      - key: GUNICORN_WORKERS
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "4"
+      - key: RATELIMIT_STORAGE_URI
+        value: memory://
+      - key: CLINIC_NAME
+        value: หมอพร้อมคุย — ระบบทดลอง
+      - key: DATA_RETENTION_DAYS
+        value: "30"
+
+databases:
+  - name: morpromkui-demo-db
+    plan: free
+    region: singapore
+    databaseName: morpromkui
+    user: morpromkui
+    postgresMajorVersion: "17"
+    ipAllowList: []

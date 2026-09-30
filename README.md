@@ -31,6 +31,9 @@ python scripts/evaluate_triage.py
 
 ## Deploy
 
+ทดลองออนไลน์บน Render: อ่าน [คู่มือ Render ภาษาไทย](docs/RENDER_TH.md)
+มี `render.yaml` สำหรับเว็บและ PostgreSQL โดยเริ่มในโหมด `stub` ที่ไม่ต้องใช้ API key
+
 read [docs/DEPLOY_TH.md](docs/DEPLOY_TH.md) in order , don't upload `.env` to Git and don't put API key in JS
 
 ## Structure

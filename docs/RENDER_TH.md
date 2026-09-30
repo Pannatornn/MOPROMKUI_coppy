@@ -1,0 +1,85 @@
+# ทดลองหมอพร้อมคุยออนไลน์บน Render
+
+ใช้ `render.yaml` ที่ root ของ repository เพื่อสร้าง Docker Web Service และ PostgreSQL ใน Singapore พร้อมกัน โดย Render ให้ URL แบบ `https://ชื่อเว็บ.onrender.com` จึงยังไม่ต้องซื้อโดเมน
+
+ชุดนี้เริ่มด้วย `AI_PROVIDER=stub`: ใช้แบบคำถามสำรองที่มีอยู่ในแอป ยังไม่ได้เรียก AI จริง และไม่ต้องใส่ API key เหมาะสำหรับทดสอบด้วยข้อมูลสมมติ ตามขอบเขตการใช้งานใน README
+
+## 1. เตรียมโค้ดใน GitHub
+
+ใช้ branch ที่มี `render.yaml` และการเปลี่ยนแปลงชุดนี้ หรือ merge PR นี้เข้า `main` ก่อน จากนั้นไป [Render Dashboard](https://dashboard.render.com/) สมัคร/เข้าสู่ระบบและเชื่อมบัญชี GitHub ที่เข้าถึง `Pannatornn/MOPROMKUI_coppy` ได้
+
+หากใช้ ZIP ให้แตกไฟล์และนำไฟล์ภายในโฟลเดอร์ `MOPROMKUI_coppy` ไปไว้ที่ root ของ repository โดยเฉพาะ `render.yaml`, `app/config.py`, `entrypoint.sh` และ `.gitattributes` ไม่วางซ้อนโฟลเดอร์เพิ่มอีกชั้น
+
+## 2. สร้างรหัสผ่านผู้ดูแลบนเครื่องของคุณ
+
+เปิด Terminal ในโฟลเดอร์โปรเจกต์ ใช้ Python 3.12 ขึ้นไป แล้วรัน:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts/make_password_hash.py
+```
+
+บน macOS/Linux ใช้ `.venv/bin/python` แทน `.\.venv\Scripts\python.exe`
+
+กรอกรหัสผ่านอย่างน้อย 14 ตัวอักษรสองครั้ง ขณะพิมพ์จะไม่แสดงตัวอักษร เก็บรหัสผ่านไว้สำหรับล็อกอิน แล้วคัดลอกผลลัพธ์ทั้งบรรทัดที่เริ่มด้วย `scrypt:` ไปใช้ในขั้นตอนถัดไป ไม่ต้องส่งรหัสผ่านหรือ hash ในแชต
+
+## 3. สร้าง Blueprint
+
+1. ใน Render เลือก **New → Blueprint** แล้วเลือก repository นี้
+2. เลือก branch ที่มีไฟล์ชุดนี้ และ Blueprint Path เป็น `render.yaml`
+3. กรอก `STAFF_USERNAME` เช่น `demo-admin` และ `STAFF_PASSWORD_HASH` ที่สร้างไว้
+4. ในช่อง Environment ของ Render วาง hash ตามจริง **ไม่ครอบด้วยเครื่องหมายอัญประกาศ** และต้องมีส่วน `$` ครบ
+5. ตรวจหน้าสรุปว่าเว็บและฐานข้อมูลเป็นแผน **Free** แล้วกด Deploy Blueprint
+
+`SECRET_KEY` สร้างอัตโนมัติ และ `DATABASE_URL` เชื่อมจากฐานข้อมูลใน Blueprint ไม่ต้องกรอกเอง หาก workspace มีฐานข้อมูลฟรีอยู่แล้ว อาจสร้างอีกไม่ได้ ให้ตรวจข้อจำกัดใน Dashboard ก่อนเลือกแผนอื่น
+
+ปล่อย Docker Command และ Root Directory เป็นค่าเริ่มต้น แอปจะสร้างตารางและบัญชีผู้ดูแลก่อนเปิด Gunicorn หากสร้างไม่ได้ ระบบจะหยุดพร้อม error ใน Logs ไม่เปิดเว็บที่ยังเตรียมฐานข้อมูลไม่สำเร็จ
+
+ไม่ต้องอัปโหลด `.env` และไม่ต้องรัน Docker Compose หรือ Caddy บน Render
+
+## 4. ตรวจหลังสถานะเป็น Live
+
+ใช้ URL ที่ Render แสดงจริง แล้วเปิด:
+
+| เส้นทาง | ผลที่ควรได้ |
+| --- | --- |
+| `/healthz` | `{"status":"ok"}` และ HTTP 200 ซึ่งตรวจการเชื่อมฐานข้อมูลด้วย |
+| `/intake` | แบบซักประวัติ สร้างเคสด้วยข้อมูลสมมติได้ |
+| `/staff/login` | เข้าด้วย username และรหัสผ่านต้นฉบับ ไม่ใช่ hash |
+
+ลองสร้างเคส เข้าหน้าเจ้าหน้าที่ดูเคส จากนั้นใช้ Manual Deploy ของ Render แล้วตรวจว่าเคสและบัญชียังอยู่ เพื่อยืนยันว่าใช้ฐานข้อมูลภายนอกตัวเว็บจริง
+
+โหมด `stub` จะแสดงข้อความว่า AI ไม่พร้อมและใช้แบบคำถามสำรอง เป็นพฤติกรรมที่ตั้งใจสำหรับการทดสอบรอบแรก
+
+## 5. เปิด AI ภายหลัง
+
+เมื่อเว็บและการล็อกอินทำงานแล้ว แก้ค่า `AI_PROVIDER` ใน `render.yaml` เป็น provider ที่เลือก เพื่อไม่ให้ Blueprint sync ครั้งถัดไปเปลี่ยนกลับเป็น `stub` แล้วเพิ่มค่าลับในหน้า **Environment** ของ Web Service:
+
+| Provider | ค่าใน Blueprint | ค่าใน Render Environment |
+| --- | --- | --- |
+| Gemini | `AI_PROVIDER=gemini` | `GEMINI_API_KEY`, `GEMINI_MODEL` |
+| OpenAI | `AI_PROVIDER=openai` | `OPENAI_API_KEY`, `OPENAI_MODEL` |
+
+เลือกชื่อโมเดลที่บัญชีของคุณเข้าถึงได้จากผู้ให้บริการ ไม่ควรถือว่าชื่อโมเดลเริ่มต้นในโค้ดใช้ได้กับทุกบัญชี เก็บ API key ใน Render เท่านั้น แล้ว deploy ใหม่ หากเรียก AI ไม่สำเร็จ แอปจะใช้แบบคำถามสำรอง
+
+## ข้อจำกัดของชุดทดลอง
+
+- เว็บ Free พักหลังไม่มีการใช้งาน 15 นาที การเปิดครั้งแรกหลังพักจึงอาจช้า
+- PostgreSQL Free หมดอายุหลังสร้าง 30 วัน ต้องวางแผนอัปเกรดหรือย้ายข้อมูลก่อนหมดอายุ และไม่มี backup อัตโนมัติสำหรับแผนนี้
+- ฐานข้อมูลปิดการเชื่อมต่อจากอินเทอร์เน็ตด้วย `ipAllowList: []` เว็บใช้การเชื่อมต่อภายใน Render หากจะ export ด้วย `pg_dump` จากเครื่องตนเอง ให้เพิ่ม IP ของตนเองชั่วคราวในรายการอนุญาตและปิดกลับหลังเสร็จ
+- ใช้ Gunicorn 1 process และ rate limiter ในหน่วยความจำ ตัวนับจะรีเซ็ตเมื่อรีสตาร์ต ถ้าจะเพิ่ม process หรือหลาย instance ต้องเปลี่ยนไปใช้ Redis และติดตั้ง dependency ของ Redis ก่อน
+- `DATA_RETENTION_DAYS=30` เป็นเกณฑ์ให้คำสั่ง `flask --app app:create_app purge-expired` ไม่ใช่ตัวตั้งเวลาลบอัตโนมัติ Blueprint นี้ไม่ได้สร้างงานตามเวลา
+- `init-db` สร้างตารางใหม่ แต่ไม่ย้ายข้อมูลจากเครื่องเดิมและไม่แก้ schema ของตารางเดิม ต้องจัดการ migration แยกเมื่อมีการเปลี่ยน schema
+- `STAFF_PASSWORD_HASH` ใช้สร้างบัญชีครั้งแรก การเปลี่ยนค่านี้หลังบัญชีถูกสร้างแล้วไม่รีเซ็ตรหัสผ่านบัญชีนั้น ให้ใช้หน้า admin จัดการผู้ใช้
+
+## เมื่อ deploy ไม่ผ่าน
+
+- `No module named psycopg2` หรือ `Can't load plugin ... postgres`: ตรวจว่า deploy branch ที่แก้ `app/config.py` แล้ว
+- `STAFF_PASSWORD_HASH must be generated`: ใส่ hash ให้ครบและไม่ใช้ `CHANGE_ME`
+- `SECRET_KEY must be ...`: ตรวจว่า Blueprint สร้าง `SECRET_KEY` แล้ว
+- `exec ... no such file` หรือ error ที่มี `\r`: ตรวจ `entrypoint.sh` ให้ใช้ LF; `.gitattributes` ในชุดนี้กำหนดไว้แล้ว
+- health check ล้มเหลว: ดู Logs ของเว็บและสถานะฐานข้อมูล ตรวจว่าไม่ได้แทน `DATABASE_URL` ด้วย SQLite หรือ URL ของ Docker ชื่อ `db`
+- ล็อกอินไม่ได้: เปิดผ่าน HTTPS และใช้รหัสผ่านต้นฉบับ หากบัญชีเคยสร้างแล้ว การเปลี่ยน hash ใน Environment จะไม่เปลี่ยนรหัสในฐานข้อมูล
+
+เอกสารอ้างอิง: [Blueprint](https://render.com/docs/blueprint-spec), [Docker](https://render.com/docs/docker), [ข้อจำกัด Free](https://render.com/docs/free)
