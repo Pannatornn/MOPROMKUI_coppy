@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}เริ่มซักประวัติ — หมอพร้อมคุย{% endblock %}
+{% block content %}
+<div class="intake-topbar">
+  <div><span class="eyebrow">SMART INTAKE</span><h1>ซักประวัติก่อนพบแพทย์</h1></div>
+  <div class="intake-steps" id="intake-steps" aria-label="ขั้นตอน">
+    <span class="active" data-step="1"><i>1</i>ข้อมูลเบื้องต้น</span><b></b><span data-step="2"><i>2</i>ซักประวัติ</span><b></b><span data-step="3"><i>3</i>ส่งให้บุคลากร</span>
+  </div>
+</div>
+
+<div class="intake-layout">
+  <section class="intake-panel" id="setup-panel">
+    <div class="panel-heading">
+      <div class="panel-icon" aria-hidden="true">01</div>
+      <div><h2>ข้อมูลเบื้องต้น</h2><p>ไม่ต้องกรอกชื่อ เบอร์โทร เลขบัตรประชาชน หรือที่อยู่</p></div>
+    </div>
+
+    <div class="emergency-strip"><strong>มีอาการฉุกเฉิน?</strong><span>หยุดกรอกและโทร <a href="tel:1669">1669</a> ทันที</span></div>
+
+    <form id="intake-form" class="form-stack">
+      <div class="form-grid">
+        <label>ช่วงอายุ
+          <select name="age_group" required>
+            <option value="">เลือกช่วงอายุ</option><option value="0-12">0–12 ปี</option><option value="13-17">13–17 ปี</option><option value="18-39">18–39 ปี</option><option value="40-59">40–59 ปี</option><option value="60+">60 ปีขึ้นไป</option><option value="unknown">ไม่ทราบ</option>
+          </select>
+        </label>
+        <label>เพศกำเนิด
+          <select name="sex_at_birth" required>
+            <option value="">เลือกคำตอบ</option><option value="female">หญิง</option><option value="male">ชาย</option><option value="intersex">อินเตอร์เซ็กซ์</option><option value="prefer_not_to_say">ไม่ประสงค์ระบุ</option>
+          </select>
+        </label>
+        <label>สถานะการตั้งครรภ์
+          <select name="pregnancy_status" required>
+            <option value="">เลือกคำตอบ</option><option value="pregnant">กำลังตั้งครรภ์</option><option value="possibly_pregnant">อาจตั้งครรภ์</option><option value="not_pregnant">ไม่ได้ตั้งครรภ์</option><option value="not_applicable">ไม่เกี่ยวข้อง</option><option value="unknown">ไม่ทราบ</option>
+          </select>
+        </label>
+        <div class="privacy-mini"><span aria-hidden="true">●</span><div><strong>ข้อมูลแบบไม่ระบุตัวตน</strong><small>ระบบใช้รหัสเคสแทนชื่อของคุณ</small></div></div>
+      </div>
+
+      <label class="complaint-label">วันนี้มีอาการอะไรเป็นหลัก
+        <textarea name="chief_complaint" rows="5" maxlength="1500" required placeholder="เช่น ปวดท้องด้านขวาตั้งแต่เมื่อคืน ปวดมากขึ้นเวลาเดิน..."></textarea>
+        <small>อธิบายเวลาเริ่ม ตำแหน่ง และระดับความรุนแรงเท่าที่ทราบ</small>
+      </label>
+
+      <label class="consent-row">
+        <input type="checkbox" name="consent" required>
+        <span>ฉันอ่านและยอมรับ <a href="{{ url_for('main.privacy') }}" target="_blank" rel="noopener">ประกาศความเป็นส่วนตัว</a> และเข้าใจว่าระบบนี้ไม่วินิจฉัยโรค</span>
+      </label>
+
+      <div id="setup-error" class="form-error" role="alert" hidden></div>
+      <button class="button button-primary button-wide button-large" type="submit" data-default-label="เริ่มคุยกับหมอพร้อมคุย">เริ่มคุยกับหมอพร้อมคุย <span>→</span></button>
+    </form>
+  </section>
+
+  <section class="chat-panel" id="chat-panel" hidden>
+    <div class="chat-header">
+      <div><span class="eyebrow">GUIDED INTERVIEW</span><h2>ซักประวัติ</h2><span id="ai-mode" class="ai-mode">กำลังเชื่อมต่อ AI</span></div>
+      <div class="chat-actions"><div class="case-reference">รหัสเคส <strong id="case-reference">—</strong></div><button id="new-case-button" class="button button-ghost button-small" type="button">＋ เริ่มเคสใหม่</button></div>
+    </div>
+    <div class="interview-progress"><div><span id="question-progress">กำลังเริ่มต้น</span><small>ระบบจะถามประมาณ 8–12 คำถามตามความจำเป็น</small></div><div class="progress-track"><i id="progress-fill"></i></div></div>
+    <div class="chat-disclaimer"><span>i</span> ตอบเฉพาะข้อมูลสุขภาพ โปรดอย่าใส่ชื่อ เบอร์โทร เลขบัตร หรือที่อยู่</div>
+    <div id="case-status" class="case-status status-collecting" aria-live="polite"><strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span></div>
+    <div id="messages" class="messages" aria-live="polite"></div>
+    <div id="typing-indicator" class="typing-indicator" hidden><i></i><i></i><i></i><span>กำลังจัดคำถามถัดไป</span></div>
+    <form id="message-form" class="message-form">
+      <label class="sr-only" for="message-input">ตอบคำถาม</label>
+      <div class="message-compose"><textarea id="message-input" rows="2" maxlength="2000" placeholder="พิมพ์คำตอบของคุณ..." required></textarea><small>Enter เพื่อส่ง · Shift + Enter เพื่อขึ้นบรรทัดใหม่</small></div>
+      <button class="send-button" type="submit" aria-label="ส่งคำตอบ"><span>ส่ง</span> →</button>
+    </form>
+    <div id="chat-error" class="form-error" role="alert" hidden></div>
+  </section>
+
+  <aside class="intake-aside">
+    <div class="aside-emergency"><span>!</span><div><strong>เหตุฉุกเฉิน</strong><p>หายใจไม่ออก หมดสติ เจ็บหน้าอกรุนแรง เลือดออกมาก หรืออ่อนแรงครึ่งซีก</p><a href="tel:1669">โทร 1669</a></div></div>
+    <div class="aside-section"><span class="aside-kicker">WHAT WE ASK</span><h3>ข้อมูลที่ระบบอาจถาม</h3><ul class="check-list"><li>ลักษณะและระยะเวลาของอาการ</li><li>ความรุนแรงและอาการร่วม</li><li>โรคประจำตัว ยา และการแพ้</li><li>ประวัติผ่าตัด ครอบครัว และการสัมผัส</li><li>สิ่งที่กังวลมากที่สุด</li></ul></div>
+    <div class="human-review"><span>✓</span><p><strong>Human-in-the-loop</strong>ข้อมูลทุกเคสต้องได้รับการตรวจโดยบุคลากรทางการแพทย์</p></div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='8') }}" defer></script>{% endblock %}

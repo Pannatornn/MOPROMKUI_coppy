@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}เข้าสู่ระบบเจ้าหน้าที่ — หมอพร้อมคุย{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="auth-intro">
+    <span class="eyebrow light">CLINICAL WORKSPACE</span>
+    <h1>ข้อมูลพร้อม<br>ก่อนผู้รับบริการ<br>เข้าห้องตรวจ</h1>
+    <p>ตรวจสรุป AI เทียบกับบทสนทนาต้นฉบับ ยืนยันระดับความเร่งด่วน และจัดการ workflow จากหน้าจอเดียว</p>
+    <div class="auth-points"><span>✓ Rule-based emergency alerts</span><span>✓ Structured clinical summary</span><span>✓ Role-based staff access</span></div>
+  </section>
+  <section class="auth-card">
+    <div class="auth-badge">SECURE STAFF ACCESS</div>
+    <h2>เข้าสู่ระบบเจ้าหน้าที่</h2>
+    <p>สำหรับบุคลากรที่ได้รับอนุญาตเท่านั้น</p>
+    <form method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>ชื่อผู้ใช้<input name="username" autocomplete="username" placeholder="your.username" required autofocus></label>
+      <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" placeholder="••••••••••••" required></label>
+      {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+      <button class="button button-primary button-wide button-large" type="submit">เข้าสู่ระบบ <span>→</span></button>
+    </form>
+    <div class="auth-footnote"><span>●</span> การเชื่อมต่อเข้ารหัสด้วย HTTPS</div>
+  </section>
+</div>
+{% endblock %}

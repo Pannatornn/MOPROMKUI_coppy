@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}หมอพร้อมคุย — Smart Clinical Intake{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <div class="hero-kicker"><span class="live-dot"></span> AI-ASSISTED PRE-VISIT INTAKE</div>
+    <h1>เตรียมข้อมูลสุขภาพ<br><em>ก่อนพบแพทย์</em></h1>
+    <p class="hero-lead">ผู้ช่วยซักประวัติภาษาไทยที่ถามอย่างเป็นระบบ ตรวจสัญญาณอันตรายก่อน AI และสรุปข้อมูลให้บุคลากรทางการแพทย์ตรวจต่อ</p>
+    <div class="button-row">
+      <a class="button button-primary button-large" href="{{ url_for('main.intake') }}">เริ่มซักประวัติ <span>→</span></a>
+      <a class="button button-ghost button-large" href="{{ url_for('main.staff_login') }}">เข้าสู่ระบบเจ้าหน้าที่</a>
+    </div>
+    <div class="trust-row">
+      <span><i>01</i> ไม่ขอชื่อหรือเลขบัตร</span>
+      <span><i>02</i> ตรวจโดยบุคลากร</span>
+      <span><i>03</i> HTTPS ปลอดภัย</span>
+    </div>
+  </div>
+
+  <aside class="care-card">
+    <div class="care-card-top"><span class="care-icon" aria-hidden="true">⌁</span><span>EMERGENCY CHECK</span></div>
+    <h2>อาการฉุกเฉิน<br>อย่ารอกรอกข้อมูล</h2>
+    <p>หายใจไม่ออก หมดสติ เจ็บหน้าอกรุนแรง เลือดออกมาก อ่อนแรงครึ่งซีก หรืออาการรุนแรงฉับพลัน</p>
+    <a class="emergency-call" href="tel:1669"><small>โทรฉุกเฉิน</small><strong>1669</strong><span>โทรทันที →</span></a>
+    <div class="care-note">กฎสัญญาณอันตรายทำงานก่อนเรียก AI ทุกครั้ง</div>
+  </aside>
+</section>
+
+<section class="metric-strip" aria-label="คุณสมบัติสำคัญ">
+  <div><strong>8–12</strong><span>คำถามตามบริบท</span></div>
+  <div><strong>Rule First</strong><span>ตรวจสัญญาณอันตรายก่อน AI</span></div>
+  <div><strong>Human Review</strong><span>คนยืนยันผลทุกเคส</span></div>
+  <div><strong>24/7</strong><span>เริ่มกรอกได้ทุกเวลา</span></div>
+</section>
+
+<section class="process-section">
+  <div class="section-intro"><span class="eyebrow">HOW IT WORKS</span><h2>ง่ายสำหรับผู้รับบริการ<br>เป็นระบบสำหรับบุคลากร</h2></div>
+  <div class="process-grid">
+    <article><span class="process-number">01</span><div class="process-icon">◎</div><h3>เล่าอาการหลัก</h3><p>กรอกเฉพาะข้อมูลสุขภาพที่จำเป็น โดยไม่ต้องระบุตัวตน</p></article>
+    <article><span class="process-number">02</span><div class="process-icon">◫</div><h3>ตอบทีละคำถาม</h3><p>ระบบเลือกถามประวัติที่สัมพันธ์กับอาการครั้งละหนึ่งเรื่อง</p></article>
+    <article><span class="process-number">03</span><div class="process-icon">✓</div><h3>ส่งให้บุคลากรตรวจ</h3><p>AI จัดสรุปพร้อม transcript เพื่อให้แพทย์หรือพยาบาลยืนยัน</p></article>
+  </div>
+</section>
+{% endblock %}

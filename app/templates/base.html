@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#d91f32">
+  <title>{% block title %}หมอพร้อมคุย{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@7.6.0/fonts/Anakotmai/Anakotmai.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='8') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('main.index') }}" aria-label="หมอพร้อมคุย หน้าแรก">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span class="brand-copy"><strong>หมอพร้อมคุย</strong><small>Smart Clinical Intake</small></span>
+    </a>
+    <nav class="site-nav" aria-label="เมนูหลัก">
+      {% if session.get('staff_authenticated') %}
+        <a href="{{ url_for('main.staff_dashboard') }}">แดชบอร์ด</a>
+        {% if session.get('staff_role') == 'admin' %}<a href="{{ url_for('main.staff_users') }}">จัดการผู้ใช้</a>{% endif %}
+        <span class="user-chip">{{ session.get('staff_display_name', 'เจ้าหน้าที่') }}</span>
+        <form method="post" action="{{ url_for('main.staff_logout') }}" class="nav-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="nav-button">ออกจากระบบ</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('main.index') }}">หน้าหลัก</a>
+        <a href="{{ url_for('main.intake') }}">เริ่มซักประวัติ</a>
+        <a class="nav-login" href="{{ url_for('main.staff_login') }}">สำหรับเจ้าหน้าที่</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack" aria-live="polite">
+          {% for category, message in messages %}<div class="flash flash-{{ category }}">{{ message }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div><strong>หมอพร้อมคุย</strong><span>เครื่องมือช่วยซักประวัติ ไม่ใช่บริการวินิจฉัยโรค</span></div>
+    <div class="footer-links"><a href="{{ url_for('main.privacy') }}">ความเป็นส่วนตัว</a><a href="tel:1669">ฉุกเฉิน 1669</a></div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

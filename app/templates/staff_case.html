@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ case.reference }} — หมอพร้อมคุย{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('main.staff_dashboard') }}">← กลับแดชบอร์ด</a>
+<section class="case-title-row">
+  <div><span class="eyebrow">CASE REVIEW</span><h1>{{ case.reference }}</h1><p>{{ case.created_at | bangkok_time }} · ช่วงอายุ {{ case.age_group }} · {{ case.sex_at_birth }}</p></div>
+  <div class="risk-stack"><span class="badge badge-{{ case.rule_urgency }}">RULE · {{ case.rule_urgency }}</span><span class="badge badge-neutral">AI · {{ case.ai_urgency_suggestion }}</span><span class="badge badge-neutral">CLINICIAN · {{ case.clinician_urgency or 'pending' }}</span></div>
+</section>
+
+{% if case.rule_urgency == 'emergency' %}<div class="emergency-strip large"><strong>กฎความปลอดภัยพบสัญญาณฉุกเฉิน</strong><span>ตรวจบทสนทนาทันทีและทำตาม protocol ของสถานพยาบาล</span></div>{% endif %}
+
+<div class="review-grid">
+  <section class="review-card summary-card">
+    <div class="card-heading"><div><span class="eyebrow">AI SUMMARY</span><h2>สรุปสำหรับบุคลากร</h2></div><span class="review-required">ต้องตรวจทาน</span></div>
+    {% set s = case.ai_summary or {} %}
+    <dl class="summary-list">
+      <dt>อาการสำคัญ</dt><dd>{{ s.get('chief_complaint', case.chief_complaint) }}</dd>
+      <dt>เริ่มและดำเนินอาการ</dt><dd>{{ s.get('onset_and_course', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>ตำแหน่ง/ลักษณะ</dt><dd>{{ s.get('symptom_location_and_character', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>ความรุนแรง/ผลกระทบ</dt><dd>{{ s.get('severity_and_impact', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>ปัจจัยกระตุ้น/บรรเทา</dt><dd>{{ (s.get('aggravating_and_relieving_factors') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>อาการร่วม</dt><dd>{{ (s.get('associated_symptoms') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>โรคและประวัติสำคัญ</dt><dd>{{ (s.get('relevant_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>ผ่าตัด/นอนโรงพยาบาล</dt><dd>{{ (s.get('past_procedures_or_hospitalizations') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>ยาและอาหารเสริม</dt><dd>{{ (s.get('current_medications') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>การแพ้</dt><dd>{{ (s.get('allergies') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>ประวัติครอบครัว</dt><dd>{{ (s.get('family_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>สังคม/การสัมผัส</dt><dd>{{ (s.get('social_and_exposure_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>เดินทาง/ผู้สัมผัสป่วย</dt><dd>{{ (s.get('travel_and_sick_contacts') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>ค่าสัญญาณชีพ</dt><dd>{{ (s.get('vital_signs_if_known') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
+      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ s.get('pregnancy_context', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>ความกังวลของผู้รับบริการ</dt><dd>{{ s.get('patient_concerns', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>ข้อมูลที่ยังขาด</dt><dd>{{ (s.get('missing_critical_information') or []) | join(', ') or '—' }}</dd>
+    </dl>
+    <p class="ai-note">สรุปนี้สร้างโดย AI และอาจผิดพลาด ต้องตรวจเทียบกับบทสนทนาต้นฉบับทุกครั้ง</p>
+  </section>
+
+  <aside class="review-sidebar">
+    <section class="review-card decision-card"><span class="eyebrow">CLINICAL DECISION</span><h2>ยืนยันโดยบุคลากร</h2>
+      <form method="post" action="{{ url_for('main.staff_review_case', case_id=case.id) }}" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>ระดับความเร่งด่วน<select name="urgency" required>{% for value in ['routine', 'soon', 'urgent', 'emergency'] %}<option value="{{ value }}" {% if case.clinician_urgency == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+        <label>สถานะ<select name="status" required>{% for value in ['collecting', 'ready', 'escalated', 'closed'] %}<option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+        <button class="button button-primary button-wide" type="submit">บันทึกการตรวจ</button>
+      </form>
+    </section>
+    {% if case.matched_red_flags %}<section class="review-card flag-card"><h3>สัญญาณที่กฎตรวจพบ</h3><ul>{% for flag in case.matched_red_flags %}<li><strong>{{ flag.label }}</strong><small>{{ flag.code }}</small></li>{% endfor %}</ul></section>{% endif %}
+  </aside>
+</div>
+
+<section class="review-card transcript-card"><div class="card-heading"><div><span class="eyebrow">SOURCE OF TRUTH</span><h2>บทสนทนาต้นฉบับ</h2></div><span>{{ case.messages|length }} ข้อความ</span></div><div class="staff-transcript">{% for message in case.messages %}<article class="transcript-line transcript-{{ message.role }}"><strong>{{ 'ผู้รับบริการ' if message.role == 'patient' else 'หมอพร้อมคุย' }}</strong><p>{{ message.content }}</p><time>{{ message.created_at | bangkok_time('%H:%M:%S') }}</time></article>{% endfor %}</div></section>
+
+{% if session.get('staff_role') == 'admin' %}<details class="danger-zone"><summary>ลบข้อมูลเคสนี้</summary><p>การลบย้อนกลับไม่ได้ พิมพ์รหัส <strong>{{ case.reference }}</strong> เพื่อยืนยัน</p><form method="post" action="{{ url_for('main.staff_delete_case', case_id=case.id) }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="confirm_reference" required autocomplete="off"><button class="button button-danger" type="submit">ลบถาวร</button></form></details>{% endif %}
+{% endblock %}

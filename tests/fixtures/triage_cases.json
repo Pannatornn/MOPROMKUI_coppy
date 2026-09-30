@@ -1,0 +1,90 @@
+[
+  {"id": "E001", "level": "emergency", "expected_code": "unconscious", "text": "คนไข้หมดสติ เรียกแล้วไม่ตื่น"},
+  {"id": "E002", "level": "emergency", "expected_code": "unconscious", "text": "ตอนนี้ไม่ตอบสนองและไม่หายใจ"},
+  {"id": "E003", "level": "emergency", "expected_code": "unconscious", "text": "ปลุกไม่ตื่นมาเกือบหนึ่งนาทีแล้ว"},
+  {"id": "E004", "level": "emergency", "expected_code": "unconscious", "text": "หัวใจหยุดเต้น ต้องทำอย่างไร"},
+
+  {"id": "E005", "level": "emergency", "expected_code": "altered_consciousness_or_shock", "text": "วันนี้ซึมลงมาก เรียกตอบช้ากว่าเดิม"},
+  {"id": "E006", "level": "emergency", "expected_code": "altered_consciousness_or_shock", "text": "อยู่ ๆ สับสนเฉียบพลัน จำคนในบ้านไม่ได้"},
+  {"id": "E007", "level": "emergency", "expected_code": "altered_consciousness_or_shock", "text": "เหงื่อแตก ตัวเย็น และเหมือนจะเป็นลม"},
+
+  {"id": "E008", "level": "emergency", "expected_code": "severe_breathing", "text": "หายใจไม่ออก แน่นมากขึ้นเรื่อย ๆ"},
+  {"id": "E009", "level": "emergency", "expected_code": "severe_breathing", "text": "หอบหนักจนพูดไม่เป็นประโยค"},
+  {"id": "E010", "level": "emergency", "expected_code": "severe_breathing", "text": "ริมฝีปากเขียวคล้ำและหายใจติดขัด"},
+  {"id": "E011", "level": "emergency", "expected_code": "severe_breathing", "text": "หายใจลำบากมาก พูดได้แค่คำสั้นๆ"},
+  {"id": "E012", "level": "emergency", "expected_code": "severe_breathing", "text": "หายใจมีเสียงดังและเริ่มตัวเขียว"},
+
+  {"id": "E013", "level": "emergency", "expected_code": "choking", "text": "สำลักอาหารแล้วพูดไม่ได้"},
+  {"id": "E014", "level": "emergency", "expected_code": "choking", "text": "อาหารติดคอ ร้องไม่ออกและปากเขียว"},
+
+  {"id": "E015", "level": "emergency", "expected_code": "chest_pain", "text": "เจ็บแน่นหน้าอกขึ้นมาทันที"},
+  {"id": "E016", "level": "emergency", "expected_code": "chest_pain", "text": "จุกแน่นกลางอกและเหงื่อออก"},
+  {"id": "E017", "level": "emergency", "expected_code": "chest_pain", "text": "แน่นหน้าอกรุนแรงไม่เคยเป็นมาก่อน"},
+  {"id": "E018", "level": "emergency", "expected_code": "chest_pain", "text": "เจ็บหน้าอกร้าวไปแขนซ้าย"},
+  {"id": "E019", "level": "emergency", "expected_code": "chest_pain", "text": "เจ็บอกแล้วร้าวไปกราม"},
+
+  {"id": "E020", "level": "emergency", "expected_code": "stroke_signs", "text": "ตื่นมาแล้วหน้าเบี้ยว"},
+  {"id": "E021", "level": "emergency", "expected_code": "stroke_signs", "text": "ปากตกและพูดไม่ชัด"},
+  {"id": "E022", "level": "emergency", "expected_code": "stroke_signs", "text": "แขนขาอ่อนแรงครึ่งซีก"},
+  {"id": "E023", "level": "emergency", "expected_code": "stroke_signs", "text": "อยู่ๆ แขนขวาชาและยกไม่ขึ้น"},
+  {"id": "E024", "level": "emergency", "expected_code": "stroke_signs", "text": "พูดไม่ชัดขึ้นมาทันทีเมื่อครู่นี้"},
+  {"id": "E025", "level": "emergency", "expected_code": "stroke_signs", "text": "เฉียบพลันขาซ้ายอ่อนแรง เดินไม่ได้"},
+
+  {"id": "E026", "level": "emergency", "expected_code": "major_bleeding", "text": "แผลที่ขาเลือดไหลไม่หยุด"},
+  {"id": "E027", "level": "emergency", "expected_code": "major_bleeding", "text": "อาเจียนเป็นเลือดหลายครั้ง"},
+  {"id": "E028", "level": "emergency", "expected_code": "major_bleeding", "text": "ถ่ายดำแล้วหน้ามืดจะเป็นลม"},
+
+  {"id": "E029", "level": "emergency", "expected_code": "seizure", "text": "ตอนนี้กำลังชักอยู่"},
+  {"id": "E030", "level": "emergency", "expected_code": "seizure", "text": "ชักต่อเนื่องยังไม่หยุด"},
+  {"id": "E031", "level": "emergency", "expected_code": "seizure", "text": "ชักนานกว่า 5 นาทีแล้ว"},
+
+  {"id": "E032", "level": "emergency", "expected_code": "anaphylaxis", "text": "หลังฉีดยาแล้วลิ้นบวม"},
+  {"id": "E033", "level": "emergency", "expected_code": "anaphylaxis", "text": "กินกุ้งแล้วคอบวม หายใจลำบาก"},
+  {"id": "E034", "level": "emergency", "expected_code": "anaphylaxis", "text": "แพ้ยา มีผื่นและหายใจไม่ออก"},
+
+  {"id": "E035", "level": "emergency", "expected_code": "self_harm", "text": "ตอนนี้อยากฆ่าตัวตาย"},
+  {"id": "E036", "level": "emergency", "expected_code": "self_harm", "text": "คิดทำร้ายตัวเองและอยู่คนเดียว"},
+  {"id": "E037", "level": "emergency", "expected_code": "self_harm", "text": "กินยาเพื่อฆ่าตัวตายไปแล้ว"},
+
+  {"id": "E038", "level": "emergency", "expected_code": "poisoning_or_overdose", "text": "เผลอกินยาเกินขนาด"},
+  {"id": "E039", "level": "emergency", "expected_code": "poisoning_or_overdose", "text": "เด็กดื่มยาฆ่าแมลงเข้าไป"},
+  {"id": "E040", "level": "emergency", "expected_code": "poisoning_or_overdose", "text": "สูดควันจากไฟไหม้แล้วซึมลง"},
+
+  {"id": "E041", "level": "emergency", "expected_code": "serious_trauma", "text": "รถชนแล้วหมดสติ"},
+  {"id": "E042", "level": "emergency", "expected_code": "serious_trauma", "text": "ตกจากที่สูงแล้วขยับไม่ได้"},
+
+  {"id": "E043", "level": "emergency", "expected_code": "sudden_severe_headache", "text": "ปวดหัวรุนแรงที่สุดในชีวิตขึ้นมาฉับพลัน"},
+  {"id": "E044", "level": "emergency", "expected_code": "sudden_severe_headache", "text": "อยู่ดีๆ ปวดศีรษะมากเฉียบพลัน"},
+
+  {"id": "E045", "level": "emergency", "expected_code": "heatstroke", "text": "ตัวร้อนจัดแล้วสับสน พูดไม่รู้เรื่อง"},
+  {"id": "E046", "level": "emergency", "expected_code": "heatstroke", "text": "สงสัยฮีทสโตรกแล้วหมดสติ"},
+
+  {"id": "E047", "level": "emergency", "expected_code": "pregnancy_emergency", "text": "ตั้งครรภ์ 30 สัปดาห์และเลือดออกมาก"},
+  {"id": "E048", "level": "emergency", "expected_code": "pregnancy_emergency", "text": "ท้องอยู่แล้วปวดท้องรุนแรงมาก"},
+
+  {"id": "N001", "level": "not_emergency", "text": "ไม่มีอาการเจ็บแน่นหน้าอก หายใจปกติ"},
+  {"id": "N002", "level": "not_emergency", "text": "ไม่ได้หายใจไม่ออก แค่คัดจมูกเล็กน้อย"},
+  {"id": "N003", "level": "not_emergency", "text": "ปฏิเสธอาการหน้าเบี้ยวและแขนขาอ่อนแรง"},
+  {"id": "N004", "level": "not_emergency", "text": "เจ็บหน้าอกเล็กน้อยตอนกดบริเวณกล้ามเนื้อ"},
+  {"id": "N005", "level": "not_emergency", "text": "ปวดหัวเล็กน้อยมา 3 วัน"},
+  {"id": "N006", "level": "not_emergency", "text": "เคยชักเมื่อสิบปีก่อน แต่ตอนนี้ปกติ"},
+  {"id": "N007", "level": "not_emergency", "text": "แผลถลอกมีเลือดซึมเล็กน้อยและหยุดแล้ว"},
+  {"id": "N008", "level": "not_emergency", "text": "ไม่มีลิ้นบวม มีเพียงผื่นคันเล็กน้อย"},
+  {"id": "N009", "level": "not_emergency", "text": "ง่วงเพราะนอนน้อย แต่เรียกตอบรู้เรื่องดี"},
+  {"id": "N010", "level": "not_emergency", "text": "ปวดท้องระดับ 3/10 ยังทำงานได้"},
+  {"id": "N011", "level": "not_emergency", "text": "ไอเล็กน้อยแต่ไม่ได้หอบมาก"},
+  {"id": "N012", "level": "not_emergency", "text": "ไม่มีเลือดออกมาก แค่ประจำเดือนตามปกติ"},
+  {"id": "N013", "level": "not_emergency", "text": "ไม่มีอาการปากเบี้ยว พูดชัด เดินได้"},
+  {"id": "N014", "level": "not_emergency", "text": "ไม่เคยหมดสติและตอนนี้รู้สึกตัวดี"},
+  {"id": "N015", "level": "not_emergency", "text": "ปฏิเสธอาการหายใจไม่ออก สามารถพูดได้ตามปกติ"},
+  {"id": "N016", "level": "not_emergency", "text": "ไม่มีอาการอาเจียนเป็นเลือด"},
+  {"id": "N017", "level": "not_emergency", "text": "ไม่ได้คิดทำร้ายตัวเอง แค่รู้สึกเครียด"},
+  {"id": "N018", "level": "not_emergency", "text": "เดินสะดุดในบ้านแต่ไม่มีบาดเจ็บรุนแรง"},
+  {"id": "N019", "level": "not_emergency", "text": "มีไข้ต่ำและปวดเมื่อยเล็กน้อย"},
+  {"id": "N020", "level": "not_emergency", "text": "มาขอข้อมูลการนัดตรวจสุขภาพทั่วไป"},
+  {"id": "N021", "level": "not_emergency", "text": "ตั้งครรภ์แต่ไม่มีเลือดออกมาก แค่คลื่นไส้"},
+  {"id": "N022", "level": "not_emergency", "text": "แพ้ยาแต่ไม่มีคอบวมและหายใจปกติ"},
+  {"id": "N023", "level": "not_emergency", "text": "รถชนแต่ไม่มีเลือดออกมาก เดินได้และรู้สึกตัวดี"},
+  {"id": "N024", "level": "not_emergency", "text": "ตัวร้อนจัดแต่ไม่สับสน รู้สึกตัวดี"},
+  {"id": "N025", "level": "not_emergency", "text": "สำลักน้ำแต่ไม่ได้หายใจไม่ออก ตอนนี้พูดได้ปกติ"}
+]

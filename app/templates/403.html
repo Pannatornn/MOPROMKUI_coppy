@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}ไม่มีสิทธิ์เข้าถึง — หมอพร้อมคุย{% endblock %}
+{% block content %}
+<section class="auth-card error-card">
+  <span class="eyebrow">ACCESS DENIED</span>
+  <h1>ไม่มีสิทธิ์เข้าถึงหน้านี้</h1>
+  <p>บัญชีของคุณไม่ได้รับสิทธิ์ผู้ดูแลระบบ</p>
+  <a class="button button-primary" href="{{ url_for('main.staff_dashboard') }}">กลับแดชบอร์ด</a>
+</section>
+{% endblock %}
