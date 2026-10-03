@@ -18,7 +18,7 @@
     <nav class="site-nav" aria-label="เมนูหลัก">
       {% if session.get('staff_authenticated') %}
         <a href="{{ url_for('main.staff_dashboard') }}">แดชบอร์ด</a>
-        {% if session.get('staff_role') == 'admin' %}<a href="{{ url_for('main.staff_users') }}">จัดการผู้ใช้</a>{% endif %}
+        {% if session.get('staff_role') == 'admin' %}<a href="{{ url_for('main.staff_users') }}">จัดการผู้ใช้</a><a href="{{ url_for('main.staff_ai_settings') }}">ตั้งค่า AI</a>{% endif %}
         <span class="user-chip">{{ session.get('staff_display_name', 'เจ้าหน้าที่') }}</span>
         <form method="post" action="{{ url_for('main.staff_logout') }}" class="nav-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

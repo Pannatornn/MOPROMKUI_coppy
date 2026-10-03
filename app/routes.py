@@ -22,6 +22,7 @@ from sqlalchemy import desc, func
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .ai import AIResult, generate_interview_turn
+from .credentials import PROVIDERS, clear_api_key, credential_status, save_api_key
 from .extensions import db, limiter
 from .models import AuditEvent, Case, Message, StaffUser
 from .prompts import PROMPT_VERSION
@@ -469,6 +470,40 @@ def staff_users():
     users = db.session.scalars(db.select(StaffUser).order_by(StaffUser.created_at)).all()
     return render_template(
         "staff_users.html", users=users, current_user=current_user, error=error
+    )
+
+
+@bp.route("/staff/ai-settings", methods=["GET", "POST"])
+def staff_ai_settings():
+    current_user = _staff_required("admin")
+    if request.method == "POST":
+        _require_csrf()
+        provider = request.form.get("provider", "")
+        action = request.form.get("action", "save")
+        if provider not in PROVIDERS:
+            abort(400, "Unknown AI provider")
+        if action == "clear":
+            if clear_api_key(provider):
+                flash(f"ลบ API key สำรองของ {provider.upper()} แล้ว ระบบจะกลับไปใช้ค่าจาก Render", "success")
+            else:
+                flash(f"ยังไม่มี API key สำรองของ {provider.upper()}", "error")
+        elif action == "save":
+            api_key = request.form.get("api_key", "").strip()
+            if not 16 <= len(api_key) <= 512 or any(character.isspace() for character in api_key):
+                flash("API key ต้องมี 16–512 ตัวอักษรและไม่มีช่องว่าง", "error")
+            else:
+                save_api_key(provider, api_key, current_user.username)
+                flash(f"บันทึก API key ใหม่สำหรับ {provider.upper()} แล้ว", "success")
+        else:
+            abort(400, "Unknown settings action")
+        return redirect(url_for("main.staff_ai_settings"))
+
+    credentials = {provider: credential_status(provider) for provider in sorted(PROVIDERS)}
+    return render_template(
+        "staff_ai_settings.html",
+        current_user=current_user,
+        credentials=credentials,
+        active_provider=current_app.config["AI_PROVIDER"],
     )
 
 

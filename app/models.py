@@ -84,3 +84,17 @@ class StaffUser(db.Model):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+
+
+class ApiCredential(db.Model):
+    """An administrator-supplied provider key, encrypted before database storage."""
+
+    __tablename__ = "api_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(db.String(16), unique=True, index=True)
+    encrypted_key: Mapped[str] = mapped_column(db.Text)
+    updated_by: Mapped[str] = mapped_column(db.String(32))
+    updated_at: Mapped[datetime] = mapped_column(
+        db.DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

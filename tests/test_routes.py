@@ -1,5 +1,9 @@
 import re
 
+from app.credentials import get_api_key
+from app.extensions import db
+from app.models import ApiCredential
+
 from .conftest import create_case
 
 
@@ -133,3 +137,43 @@ def test_admin_can_create_staff_account(client):
     )
     assert staff_login.status_code == 302
     assert client.get("/staff/users").status_code == 403
+
+
+def test_admin_can_replace_api_key_without_exposing_it(client, app):
+    login_page = client.get("/staff/login")
+    csrf = re.search(rb'name="csrf_token" value="([^"]+)"', login_page.data).group(1).decode()
+    login = client.post(
+        "/staff/login",
+        data={"csrf_token": csrf, "username": "nurse", "password": "correct-horse-battery"},
+    )
+    assert login.status_code == 302
+
+    settings_page = client.get("/staff/ai-settings")
+    assert settings_page.status_code == 200
+    csrf = re.search(rb'name="csrf_token" value="([^"]+)"', settings_page.data).group(1).decode()
+    new_key = "sk-test-new-key-that-is-long-enough"
+    saved = client.post(
+        "/staff/ai-settings",
+        data={"csrf_token": csrf, "provider": "openai", "action": "save", "api_key": new_key},
+    )
+    assert saved.status_code == 302
+
+    with app.app_context():
+        credential = db.session.scalar(
+            db.select(ApiCredential).where(ApiCredential.provider == "openai")
+        )
+        assert credential is not None
+        assert new_key not in credential.encrypted_key
+        assert credential.updated_by == "nurse"
+        assert get_api_key("openai") == new_key
+
+    rendered = client.get("/staff/ai-settings")
+    assert new_key.encode() not in rendered.data
+
+
+def test_non_admin_cannot_open_ai_settings(client):
+    with client.session_transaction() as staff_session:
+        staff_session["staff_authenticated"] = True
+        staff_session["staff_user_id"] = 999
+        staff_session["staff_role"] = "staff"
+    assert client.get("/staff/ai-settings").status_code == 401

@@ -6,6 +6,7 @@ import logging
 
 from flask import current_app
 
+from .credentials import get_api_key
 from .models import Case
 from .prompts import SYSTEM_PROMPT
 from .schemas import ClinicalSummary, InterviewTurn
@@ -110,7 +111,7 @@ def _gemini_turn(case: Case) -> AIResult:
     from openai import OpenAI
 
     client = OpenAI(
-        api_key=current_app.config["GEMINI_API_KEY"],
+        api_key=get_api_key("gemini"),
         base_url=current_app.config["GEMINI_BASE_URL"],
         timeout=25.0,
         max_retries=1,
@@ -141,7 +142,7 @@ def _gemini_turn(case: Case) -> AIResult:
 def generate_interview_turn(case: Case) -> AIResult:
     provider = current_app.config["AI_PROVIDER"]
     if provider == "gemini":
-        api_key = current_app.config["GEMINI_API_KEY"]
+        api_key = get_api_key("gemini")
         if not api_key or api_key.startswith("CHANGE_ME"):
             return _fallback(case, "provider_disabled")
         try:
@@ -150,7 +151,7 @@ def generate_interview_turn(case: Case) -> AIResult:
             logger.warning("Gemini request failed: %s", type(exc).__name__)
             return _fallback(case, type(exc).__name__)
 
-    api_key = current_app.config["OPENAI_API_KEY"]
+    api_key = get_api_key("openai")
     if provider != "openai" or not api_key or api_key.startswith("CHANGE_ME"):
         return _fallback(case, "provider_disabled")
 
