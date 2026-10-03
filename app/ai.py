@@ -13,6 +13,16 @@ from .schemas import ClinicalSummary, InterviewTurn
 
 logger = logging.getLogger(__name__)
 
+FALLBACK_NOTICES = {
+    "provider_disabled": "AI ไม่พร้อมใช้งาน เพราะยังไม่มี API key ที่ใช้งานได้ ผู้ดูแลควรตรวจหน้า ตั้งค่า AI",
+    "AuthenticationError": "API key ไม่ถูกต้องหรือถูกยกเลิก ผู้ดูแลควรเปลี่ยน key ใหม่",
+    "PermissionDeniedError": "บัญชี API นี้ไม่มีสิทธิ์ใช้ model ที่ตั้งไว้ ผู้ดูแลควรตรวจสิทธิ์บัญชีหรือเปลี่ยน model",
+    "NotFoundError": "ไม่พบ model ที่ตั้งไว้ ผู้ดูแลควรตรวจค่า OPENAI_MODEL ใน Render",
+    "RateLimitError": "API key นี้ถึงขีดจำกัดการใช้งาน ผู้ดูแลสามารถเปลี่ยน key ใหม่ในหน้า ตั้งค่า AI",
+    "APITimeoutError": "AI ตอบช้ากว่ากำหนด ระบบจึงใช้คำถามสำรองชั่วคราว",
+    "APIConnectionError": "เชื่อมต่อ AI ไม่สำเร็จชั่วคราว ระบบจึงใช้คำถามสำรอง",
+}
+
 
 @dataclass
 class AIResult:
@@ -46,8 +56,11 @@ def _fallback(case: Case, error_code: str | None = None) -> AIResult:
     else:
         assistant_message = questions[answered]
         if error_code and answered == 0:
+            notice = FALLBACK_NOTICES.get(
+                error_code, "AI ไม่พร้อมใช้งาน ระบบจึงใช้คำถามสำรองชั่วคราว"
+            )
             assistant_message = (
-                "ขณะนี้ AI ไม่พร้อมใช้งาน ระบบจึงใช้คำถามสำรองชั่วคราว: "
+                f"ขณะนี้ {notice}: "
                 f"{assistant_message}"
             )
     summary = ClinicalSummary(

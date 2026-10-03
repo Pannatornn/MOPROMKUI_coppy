@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import openai
 
-from app.ai import generate_interview_turn
+from app.ai import _fallback, generate_interview_turn
 from app.extensions import db
 from app.models import Case, Message
 from app.prompts import PROMPT_VERSION, SYSTEM_PROMPT
@@ -160,3 +160,23 @@ def test_gemini_without_key_uses_safe_fallback(app):
         result = generate_interview_turn(case)
         assert result.provider == "safe_fallback"
         assert result.error_code == "provider_disabled"
+
+
+def test_fallback_explains_rate_limit_without_exposing_provider_details(app):
+    with app.app_context():
+        case = Case(
+            reference="MPK-TESTRATE",
+            token_hash="x" * 64,
+            age_group="18-39",
+            sex_at_birth="female",
+            pregnancy_status="not_pregnant",
+            chief_complaint="ปวดท้อง",
+            consent_version="test",
+            consent_at=datetime.now(timezone.utc),
+        )
+        db.session.add(case)
+        db.session.add(Message(case=case, role="patient", content="ปวดท้อง"))
+        db.session.flush()
+        result = _fallback(case, "RateLimitError")
+        assert "ถึงขีดจำกัด" in result.turn.assistant_message
+        assert "API key นี้" in result.turn.assistant_message
