@@ -188,6 +188,7 @@ def test_fallback_explains_rate_limit_without_exposing_provider_details(app):
 @pytest.mark.parametrize(
     "status,second_fails,elapsed,expected_calls,expected_provider",
     [(500, False, 2, 2, "gemini"),
+     (503, False, 2, 2, "gemini"),
      (503, True, 2, 2, "safe_fallback"),
      (429, False, 2, 1, "safe_fallback"),
      (401, False, 2, 1, "safe_fallback"),
@@ -226,15 +227,21 @@ def test_gemini_retry_is_bounded_and_only_for_server_errors(
         assert len(calls) == expected_calls
         assert result.provider == expected_provider
         assert len(case.messages) == 3
+        if status == 503 and not second_fails:
+            assert result.model == "gemini-3.1-flash-lite"
         if expected_calls == 2:
             first = json.loads(calls[0].content)
             second = json.loads(calls[1].content)
             assert first["contents"] == second["contents"]
-            assert "responseJsonSchema" not in second["generationConfig"]
+            if status == 503:
+                assert "/gemini-3.1-flash-lite:generateContent" in str(calls[1].url)
+                assert "responseJsonSchema" in second["generationConfig"]
+            else:
+                assert "responseJsonSchema" not in second["generationConfig"]
+                assert "schema" in second["systemInstruction"]["parts"][-1]["text"]
             assert second["generationConfig"]["responseMimeType"] == "application/json"
-            assert "schema" in second["systemInstruction"]["parts"][-1]["text"]
             assert calls[1].extensions["timeout"]["read"] == 87.0
-        if status == 503:
+        if status == 503 and second_fails:
             assert "บริการ AI ขัดข้องชั่วคราว" in result.turn.assistant_message
             assert "ข้อความถัดไป" in result.turn.assistant_message
 
