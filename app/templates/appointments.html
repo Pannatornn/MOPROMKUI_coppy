@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}นัดหมายแพทย์ · หมอพร้อมคุย{% endblock %}
+{% block content %}
+<section class="appointment-page">
+  <span class="eyebrow">APPOINTMENTS</span><h1>เลือกวันที่สะดวก<br>แล้วพบหมอที่ใช่</h1>
+  <p class="appointment-intro">หมอแต่ละคนมีตารางออกตรวจต่างกัน เลือกหมอ → วันเดือนปี → เวลาที่ว่าง</p>
+  <div class="appointment-demo"><strong>ระบบนัดหมายทดลอง</strong> ใช้หมอและตารางสมมติ ยังไม่ใช่การนัดกับโรงพยาบาลจริง · เวลาไทย · คิวละ 30 นาที</div>
+  {% if not doctors %}<p>กำลังเตรียมตารางนัดหมาย กรุณาลองใหม่ภายหลัง</p>{% else %}
+  <h2>1. เลือกแพทย์</h2>
+  <div class="doctor-grid">
+    {% for doctor in doctors %}
+    <article class="doctor-card {{ 'doctor-selected' if doctor.id == selected.id else '' }}">
+      <span class="doctor-specialty">{{ doctor.specialty }}</span>
+      <h3>{{ doctor.name }}</h3><p>{{ doctor.schedule_label }}</p>
+      <a class="button {{ 'button-primary' if doctor.id == selected.id else 'button-ghost' }}" href="{{ url_for('appointments.booking', doctor=doctor.id) }}">{{ 'กำลังเลือก' if doctor.id == selected.id else 'เลือกแพทย์คนนี้' }}</a>
+      <div class="upcoming-days"><small>วันว่างใกล้ที่สุด</small>{% for available in upcoming.get(doctor.id, []) %}<a href="{{ url_for('appointments.booking', doctor=doctor.id, day=available.isoformat()) }}">{{ available|appointment_date }}</a>{% else %}<span>ยังไม่มีคิวว่าง</span>{% endfor %}</div>
+    </article>
+    {% endfor %}
+  </div>
+  <section class="appointment-panel">
+    <h2>2. เลือกวันและเวลา</h2>
+    <form method="get" class="appointment-filters">
+      <input type="hidden" name="doctor" value="{{ selected.id }}">
+      <label>วัน / เดือน / ปี<input type="date" name="day" value="{{ day.isoformat() }}" min="{{ today.isoformat() }}" max="{{ maximum.isoformat() }}" required></label>
+      <button type="submit" class="button button-ghost">ดูเวลาว่าง</button>
+    </form>
+    <h3>{{ selected.name }} · {{ day|appointment_date }}</h3>
+    <p class="appointment-muted">จองล่วงหน้าได้ 28 วัน เลือกเวลาว่างหนึ่งคิว</p>
+    {% if slots %}
+    <form method="post" action="{{ url_for('appointments.book') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="appointment-slots">
+        {% for slot in slots %}
+        <label class="appointment-slot slot-{{ slot.state }}">
+          <input type="radio" name="slot_id" value="{{ slot.id }}" required {% if slot.state != 'free' %}disabled{% endif %}>
+          <span><strong>{{ slot.starts_at|bangkok_time('%H:%M') }}</strong><small>{{ {'free':'ว่าง', 'booked':'จองแล้ว', 'blocked':'ปิดรับ'}.get(slot.state, 'ไม่ว่าง') }}</small></span>
+        </label>{% endfor %}
+      </div>
+      {% if slots|selectattr('state', 'equalto', 'free')|list %}<button class="button button-primary" type="submit">ยืนยันนัดทดลอง</button>{% endif %}
+    </form>
+    {% else %}<div class="appointment-empty">ไม่มีคิวว่างในวันนี้ ลองเลือกวันว่างจากบัตรแพทย์ด้านบน หรือเลือกหมอคนอื่น</div>{% endif %}
+  </section>
+  <section class="appointment-panel">
+    <h2>นัดของคุณในเบราว์เซอร์นี้</h2><p class="appointment-muted">เก็บรหัสนัดไว้สำหรับอ้างอิง รายการนี้ผูกกับเซสชันของเบราว์เซอร์ และอาจหายเมื่อออกจากระบบหรือล้างคุกกี้</p>
+    {% for item in bookings %}
+    <article class="appointment-receipt">
+      <div><strong>{{ item.reference }}</strong><h3>{{ item.doctor.name }}</h3><p>{{ (item.starts_at|appointment_local).date()|appointment_date }} · {{ item.starts_at|bangkok_time('%H:%M') }} น.</p><span class="appointment-status">{{ 'ยืนยันนัดทดลอง' if item.status == 'booked' else 'ยกเลิกแล้ว' }}</span></div>
+      {% if item.status == 'booked' and item.starts_at|appointment_future %}<form method="post" action="{{ url_for('appointments.cancel', appointment_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="button button-ghost">ยกเลิกนัด</button></form>{% endif %}
+    </article>
+    {% else %}<p>ยังไม่มีนัด เลือกเวลาที่ว่างเพื่อทดลองจองได้เลย</p>{% endfor %}
+  </section>{% endif %}
+</section>
+{% endblock %}
