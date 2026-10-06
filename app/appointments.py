@@ -125,7 +125,7 @@ def book():
     _require_csrf()
     slot = db.get_or_404(AppointmentSlot, request.form.get("slot_id", type=int))
     # Claim the slot in the database, so simultaneous bookings cannot both win.
-    claimed = db.session.execute(update(AppointmentSlot).where(
+    claimed = db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(
         AppointmentSlot.id == slot.id, AppointmentSlot.state == "free",
         AppointmentSlot.starts_at > _now(),
         AppointmentSlot.starts_at < _day_range(_today() + timedelta(days=29))[0],
@@ -152,9 +152,9 @@ def _cancel(appointment, owner=None):
     if owner:
         conditions.append(Appointment.owner_hash == owner)
     slot_id = appointment.slot_id
-    changed = db.session.execute(update(Appointment).where(*conditions).values(status="cancelled", slot_id=None)).rowcount
+    changed = db.session.execute(update(Appointment).execution_options(synchronize_session=False).where(*conditions).values(status="cancelled", slot_id=None)).rowcount
     if changed and slot_id:
-        db.session.execute(update(AppointmentSlot).where(AppointmentSlot.id == slot_id, AppointmentSlot.state == "booked").values(state="free"))
+        db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(AppointmentSlot.id == slot_id, AppointmentSlot.state == "booked").values(state="free"))
     db.session.commit()
     flash("ยกเลิกนัดและคืนคิวแล้ว" if changed else "นัดนี้ยกเลิกไปแล้วหรือผ่านเวลานัดแล้ว", "success" if changed else "error")
 
@@ -199,7 +199,7 @@ def staff_calendar():
             slot = db.get_or_404(AppointmentSlot, request.form.get("slot_id", type=int))
             if slot.doctor_id != doctor.id:
                 abort(400)
-            changed = db.session.execute(update(AppointmentSlot).where(AppointmentSlot.id == slot.id,
+            changed = db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(AppointmentSlot.id == slot.id,
                 AppointmentSlot.state == ("free" if action == "block" else "blocked"),
                 AppointmentSlot.starts_at > _now()).values(state="blocked" if action == "block" else "free")).rowcount
             db.session.commit()
