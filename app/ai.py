@@ -132,6 +132,12 @@ def _gemini_turn(case: Case) -> AIResult:
     # Use Google's native endpoint and validate the JSON locally. This avoids
     # translating our schema through the OpenAI compatibility layer.
     model = current_app.config["GEMINI_MODEL"].removeprefix("models/")
+    primary_model = model
+    fallback_model = current_app.config.get("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite").removeprefix("models/") or model
+    started_at = time.monotonic()
+    cooldowns = current_app.extensions.setdefault("gemini_model_cooldowns", {})
+    if cooldowns.get(primary_model, 0) > started_at:
+        model = fallback_model
     endpoint = "https://generativelanguage.googleapis.com/v1beta/models/"
     payload = {
         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
@@ -143,20 +149,26 @@ def _gemini_turn(case: Case) -> AIResult:
             "responseJsonSchema": InterviewTurn.model_json_schema(),
         },
     }
-    deadline = time.monotonic() + 90.0
+    deadline = started_at + 90.0
     with httpx.Client() as client:
         for attempt in range(2):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return _fallback(case, "APITimeoutError")
             try:
+                attempt_timeout = min(45.0, remaining) if attempt == 0 else remaining
                 response = client.post(
                     endpoint + model + ":generateContent",
                     headers={"x-goog-api-key": get_api_key("gemini")},
                     json=payload,
-                    timeout=httpx.Timeout(remaining, connect=min(10.0, remaining)),
+                    timeout=httpx.Timeout(attempt_timeout, connect=min(10.0, attempt_timeout)),
                 )
             except httpx.TimeoutException:
+                if attempt == 0 and deadline - time.monotonic() > 1.0:
+                    cooldowns[primary_model] = deadline + 30.0
+                    model = fallback_model
+                    logger.warning("Gemini timed out: trying fallback model %s", model)
+                    continue
                 return _fallback(case, "APITimeoutError")
             except httpx.RequestError:
                 return _fallback(case, "APIConnectionError")
@@ -172,7 +184,8 @@ def _gemini_turn(case: Case) -> AIResult:
                 # If schema-constrained generation fails, use JSON mode for
                 # the retry. The same local schema still validates the output.
                 if response.status_code == 503:
-                    model = current_app.config.get("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite").removeprefix("models/") or model
+                    cooldowns[primary_model] = deadline + 30.0
+                    model = fallback_model
                     logger.warning("Gemini unavailable: trying fallback model %s", model)
                 else:
                     schema = payload["generationConfig"].pop("responseJsonSchema")
