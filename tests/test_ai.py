@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from datetime import datetime, timezone
 
 import openai
+import json
 import httpx
 import pytest
 import app.ai as ai_module
@@ -98,27 +99,24 @@ def test_gemini_structured_output_path(app, monkeypatch):
         remaining_questions=["อาการร่วม"],
     )
 
-    class FakeCompletions:
-        def parse(self, **kwargs):
-            assert kwargs["model"] == "gemini-test"
-            assert kwargs["response_format"] is InterviewTurn
-            assert len(kwargs["messages"]) == 2
-            message = SimpleNamespace(parsed=parsed)
-            return SimpleNamespace(
-                choices=[SimpleNamespace(message=message)], _request_id="gemini_req_test"
-            )
+    native_client = httpx.Client
 
-    class FakeOpenAI:
-        def __init__(self, **kwargs):
-            assert kwargs["api_key"] == "gemini-key-test"
-            assert kwargs["base_url"] == "https://generativelanguage.googleapis.com/v1beta/openai/"
-            assert kwargs["timeout"] == 90.0
-            assert kwargs["max_retries"] == 0
-            self.beta = SimpleNamespace(
-                chat=SimpleNamespace(completions=FakeCompletions())
-            )
+    def handler(request):
+        assert str(request.url) == "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent"
+        assert request.headers["x-goog-api-key"] == "gemini-key-test"
+        payload = json.loads(request.content)
+        assert payload["systemInstruction"]["parts"][0]["text"] == SYSTEM_PROMPT
+        assert payload["generationConfig"]["responseJsonSchema"] == InterviewTurn.model_json_schema()
+        assert "transcript" in payload["contents"][0]["parts"][0]["text"]
+        assert 0 < request.extensions["timeout"]["read"] <= 90
+        return httpx.Response(200, json={
+            "responseId": "gemini_req_test",
+            "candidates": [{"finishReason": "STOP", "content": {"parts": [
+                {"text": parsed.model_dump_json()}
+            ]}}],
+        })
 
-    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(ai_module.httpx, "Client", lambda: native_client(transport=httpx.MockTransport(handler)))
     app.config.update(
         AI_PROVIDER="gemini",
         GEMINI_API_KEY="gemini-key-test",
@@ -192,44 +190,32 @@ def test_fallback_explains_rate_limit_without_exposing_provider_details(app):
     [(500, False, 2, 2, "gemini"),
      (503, True, 2, 2, "safe_fallback"),
      (429, False, 2, 1, "safe_fallback"),
+     (401, False, 2, 1, "safe_fallback"),
      (500, False, 90, 1, "safe_fallback")],
 )
 def test_gemini_retry_is_bounded_and_only_for_server_errors(
     app, monkeypatch, status, second_fails, elapsed, expected_calls, expected_provider
 ):
     calls = []
-    remaining_timeouts = []
-    error_class = openai.RateLimitError if status == 429 else openai.InternalServerError
-    error = error_class(
-        "synthetic provider error",
-        response=httpx.Response(status, request=httpx.Request("POST", "https://example.test")),
-        body=None,
-    )
     parsed = InterviewTurn(
         assistant_message="คำถามทดสอบ", status="collecting", urgency_suggestion="routine",
         summary=ClinicalSummary(chief_complaint="ทดสอบ", onset_and_course="วันนี้",
                                 severity_and_impact="เล็กน้อย"),
         red_flags_reported=[], remaining_questions=["คำถามทดสอบ"],
     )
+    native_client = httpx.Client
 
-    class FakeClient:
-        def __init__(self, **kwargs):
-            self.beta = SimpleNamespace(chat=SimpleNamespace(completions=self))
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1 or second_fails:
+            return httpx.Response(status, json={"error": {"message": "secret-patient-text"}})
+        return httpx.Response(200, json={"candidates": [{
+            "finishReason": "STOP", "content": {"parts": [{"text": parsed.model_dump_json()}]}
+        }]})
 
-        def parse(self, **kwargs):
-            calls.append(kwargs)
-            if len(calls) == 1 or second_fails:
-                raise error
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=parsed))])
-
-        def with_options(self, **kwargs):
-            remaining_timeouts.append(kwargs["timeout"])
-            return self
-
-    times = iter([0, elapsed, elapsed + 1])
-    monkeypatch.setattr(ai_module.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(ai_module.time, "sleep", lambda seconds: None)
-    monkeypatch.setattr(openai, "OpenAI", FakeClient)
+    times = iter([0, 0, elapsed, elapsed + 1])
+    monkeypatch.setattr(ai_module, "time", SimpleNamespace(monotonic=lambda: next(times), sleep=lambda seconds: None))
+    monkeypatch.setattr(ai_module.httpx, "Client", lambda: native_client(transport=httpx.MockTransport(handler)))
     app.config.update(AI_PROVIDER="gemini", GEMINI_API_KEY="synthetic-key")
     with app.app_context():
         case = Case(reference="MPK-RETRY", chief_complaint="ทดสอบ", pregnancy_status="not_applicable")
@@ -241,8 +227,28 @@ def test_gemini_retry_is_bounded_and_only_for_server_errors(
         assert result.provider == expected_provider
         assert len(case.messages) == 3
         if expected_calls == 2:
-            assert calls[0] == calls[1]
-            assert remaining_timeouts == [87.0]
+            assert calls[0].content == calls[1].content
+            assert calls[1].extensions["timeout"]["read"] == 87.0
         if status == 503:
             assert "บริการ AI ขัดข้องชั่วคราว" in result.turn.assistant_message
             assert "ข้อความถัดไป" in result.turn.assistant_message
+
+
+@pytest.mark.parametrize("response_data", [
+    {"candidates": []},
+    {"candidates": [{"finishReason": "SAFETY"}]},
+    {"candidates": [{"finishReason": "MAX_TOKENS"}]},
+    {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "{}"}]}}]},
+    {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "not-json"}]}}]},
+])
+def test_gemini_invalid_or_blocked_output_uses_fallback(app, monkeypatch, response_data):
+    native_client = httpx.Client
+    monkeypatch.setattr(ai_module.httpx, "Client", lambda: native_client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=response_data))))
+    app.config.update(AI_PROVIDER="gemini", GEMINI_API_KEY="synthetic-key")
+    with app.app_context():
+        case = Case(reference="MPK-INVALID", chief_complaint="ทดสอบ", pregnancy_status="not_applicable")
+        case.messages = [Message(role="patient", content="ข้อมูลสมมติ")]
+        result = generate_interview_turn(case)
+        assert result.provider == "safe_fallback"
+        assert result.error_code in {"empty_or_refused", "invalid_response"}
