@@ -55,13 +55,13 @@
     {% else %}<div class="appointment-empty">ไม่มีคิวว่างในวันนี้ ลองเลือกวันว่างจากบัตรแพทย์ด้านบน หรือเลือกหมอคนอื่น</div>{% endif %}
   </section>
   {% endif %}<section class="appointment-panel">
-    <h2>นัดของคุณในเบราว์เซอร์นี้</h2><p class="appointment-muted">เก็บรหัสนัดไว้สำหรับอ้างอิง รายการนี้ผูกกับเซสชันของเบราว์เซอร์ และอาจหายเมื่อออกจากระบบหรือล้างคุกกี้</p>
-    {% for item in bookings %}
+    <h2>{{ 'นัดอื่นในเบราว์เซอร์นี้' if ticket else 'นัดของคุณในเบราว์เซอร์นี้' }}</h2><p class="appointment-muted">เก็บรหัสนัดไว้สำหรับอ้างอิง รายการนี้ผูกกับเซสชันของเบราว์เซอร์ และอาจหายเมื่อออกจากระบบหรือล้างคุกกี้</p>
+    {% for item in bookings if not ticket or item.id != ticket.appointment_id %}
     <article class="appointment-receipt">
       <div><strong>{{ item.reference }}</strong><h3>{{ item.doctor.name }}</h3><p>{{ (item.starts_at|appointment_local).date()|appointment_date }} · {{ item.starts_at|bangkok_time('%H:%M') }} น.</p><span class="appointment-status">{{ 'ยืนยันนัดทดลอง' if item.status == 'booked' else 'ยกเลิกแล้ว' }}</span></div>
       {% if item.status == 'booked' and item.starts_at|appointment_future %}<form method="post" action="{{ url_for('appointments.cancel', appointment_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="button button-ghost">ยกเลิกนัด</button></form>{% endif %}
     </article>
-    {% else %}<p>ยังไม่มีนัด เลือกเวลาที่ว่างเพื่อทดลองจองได้เลย</p>{% endfor %}
+    {% else %}<p>{{ 'ไม่มีนัดอื่นในเซสชันนี้' if ticket else 'ยังไม่มีนัด เลือกเวลาที่ว่างเพื่อทดลองจองได้เลย' }}</p>{% endfor %}
   </section>
 </section>
 {% endblock %}
