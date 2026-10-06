@@ -11,6 +11,8 @@
 
   let caseId = null;
   let caseToken = null;
+  let sending = false;
+  let refreshing = false;
 
   const setStep = (currentStep) => {
     for (const item of document.querySelectorAll("#intake-steps [data-step]")) {
@@ -63,8 +65,8 @@
     }
     document.querySelector("#case-reference").textContent = data.reference;
     const patientTurns = (data.messages || []).filter((item) => item.role === "patient").length;
-    document.querySelector("#question-progress").textContent = `ตอบแล้ว ${patientTurns} ข้อ`;
-    document.querySelector("#progress-fill").style.width = `${Math.min(100, Math.max(10, patientTurns / 8 * 100))}%`;
+    document.querySelector("#question-progress").textContent = `ส่งข้อมูลแล้ว ${patientTurns} ข้อความ`;
+    document.querySelector("#progress-fill").style.width = `${Math.min(100, Math.max(0, patientTurns / 12 * 100))}%`;
 
     if (data.ai_mode === "ai") {
       aiMode.className = "ai-mode ai-mode-online";
@@ -81,22 +83,32 @@
     }
 
     const status = document.querySelector("#case-status");
-    const closedForPatient = data.urgency === "emergency" || ["ready", "escalated", "closed"].includes(data.status);
-    const urgentReview = data.urgency === "urgent";
+    const closedForPatient = data.urgency === "emergency" || data.clinician_urgency === "emergency" || ["ready", "escalated", "closed"].includes(data.status);
+    const urgentReview = data.urgency === "urgent" && !(data.appointment_referral?.source === "staff" && data.appointment_referral.state === "ready");
     setStep(closedForPatient ? 3 : 2);
     status.hidden = false;
-    if (data.urgency === "emergency") {
+    if (data.urgency === "emergency" || data.clinician_urgency === "emergency") {
       status.className = "case-status status-emergency";
       status.innerHTML = "<strong>พบสัญญาณที่อาจฉุกเฉิน</strong><span>หยุดตอบและโทร 1669 ทันที</span>";
     } else if (urgentReview || data.status === "escalated") {
       status.className = "case-status status-urgent";
-      status.innerHTML = "<strong>พบอาการที่ควรตรวจโดยเร็ว</strong><span>ระบบแจ้งบุคลากรแล้ว โปรดตอบคำถามต่อ และโทร 1669 หากอาการรุนแรงขึ้นหรือไม่ปลอดภัย</span>";
+      status.innerHTML = "<strong>พบอาการที่ควรตรวจโดยเร็ว</strong><span>เคสอยู่ในแดชบอร์ดให้เจ้าหน้าที่ประเมิน หากอาการรุนแรงขึ้นหรือไม่ปลอดภัยให้โทร 1669</span>";
+    } else if (data.status === "closed") {
+      status.className = "case-status status-ready";
+      status.innerHTML = "<strong>ปิดเคสแล้ว</strong><span>การซักประวัติเคสนี้สิ้นสุดแล้ว</span>";
     } else if (closedForPatient) {
       status.className = "case-status status-ready";
-      status.innerHTML = "<strong>ส่งข้อมูลเรียบร้อยแล้ว</strong><span>ข้อมูลพร้อมให้บุคลากรตรวจ คุณสามารถเริ่มเคสใหม่ได้</span>";
+      status.innerHTML = "<strong>ส่งข้อมูลเรียบร้อยแล้ว</strong><span>ข้อมูลพร้อมตรวจ ยังไม่ได้หมายความว่าเจ้าหน้าที่ประเมินหรือยืนยันนัดแล้ว</span>";
     } else {
       status.className = "case-status status-collecting";
       status.innerHTML = "<strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span>";
+    }
+    const review = data.staff_review;
+    const reviewPanel = document.querySelector('#staff-review-result');
+    reviewPanel.hidden = !review;
+    if (review) {
+      document.querySelector('#staff-review-guidance').textContent = review.guidance || 'เจ้าหน้าที่บันทึกผลประเมินแล้ว แต่ยังไม่ได้ระบุขั้นตอนต่อ';
+      document.querySelector('#staff-review-urgency').textContent = `ผลประเมิน: ${{routine:'ทั่วไป', soon:'ควรตรวจเร็ว', urgent:'เร่งด่วน', emergency:'ฉุกเฉิน'}[review.urgency] || 'ยังไม่ระบุ'}`;
     }
     messageForm.hidden = closedForPatient;
     const referral = data.appointment_referral;
@@ -118,7 +130,11 @@
       },
     });
     const data = await response.json().catch(() => ({ error: "เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์" }));
-    if (!response.ok && response.status !== 409) throw new Error(data.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+    if (!response.ok && !(response.status === 409 && data.id && data.messages)) {
+      const error = new Error(data.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+      error.status = response.status;
+      throw error;
+    }
     return data;
   };
 
@@ -132,6 +148,7 @@
     document.querySelector("#messages").replaceChildren();
     document.querySelector("#case-status").hidden = true;
     document.querySelector('#appointment-referral').hidden = true;
+    document.querySelector('#staff-review-result').hidden = true;
     setError("#setup-error", "");
     setError("#chat-error", "");
     chatPanel.hidden = true;
@@ -179,8 +196,7 @@
     setError("#chat-error", "");
     const content = messageInput.value.trim();
     if (!content) return;
-    appendMessage("patient", content);
-    messageInput.value = "";
+    sending = true;
     typingIndicator.hidden = false;
     setBusy(messageForm, true, "กำลังส่ง");
     try {
@@ -188,12 +204,12 @@
         method: "POST",
         body: JSON.stringify({ content }),
       });
-      const last = data.messages[data.messages.length - 1];
-      if (last && last.role === "assistant") appendMessage("assistant", last.content);
-      renderCase(data, false);
+      messageInput.value = "";
+      renderCase(data, true);
     } catch (error) {
       setError("#chat-error", error.message);
     } finally {
+      sending = false;
       typingIndicator.hidden = true;
       setBusy(messageForm, false);
       messageInput.focus();
@@ -216,10 +232,24 @@
       setupPanel.hidden = true;
       chatPanel.hidden = false;
       renderCase(data, true);
-    } catch (_error) {
-      clearActiveCase();
+    } catch (error) {
+      if (error.status === 404) clearActiveCase();
+      else setError("#setup-error", "ยังโหลดเคสเดิมไม่ได้ โปรดโหลดหน้าใหม่ ข้อมูลเดิมยังเก็บอยู่");
     }
   };
 
+  const refreshCase = async () => {
+    if (!caseId || !caseToken || sending || refreshing || document.hidden) return;
+    const activeId = caseId;
+    refreshing = true;
+    try {
+      const data = await api(`/api/cases/${activeId}`);
+      if (caseId === activeId && !sending) renderCase(data, false);
+    } catch (_error) {
+      // A transient refresh failure must not discard the patient's case token.
+    } finally { refreshing = false; }
+  };
+  window.setInterval(refreshCase, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCase(); });
   resume();
 })();
