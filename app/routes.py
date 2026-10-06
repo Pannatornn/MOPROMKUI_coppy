@@ -26,6 +26,7 @@ from .credentials import PROVIDERS, clear_api_key, credential_status, save_api_k
 from .extensions import db, limiter
 from .models import AuditEvent, Case, Message, StaffUser
 from .prompts import PROMPT_VERSION
+from .referrals import recommend_department
 from .safety import (
     EMERGENCY_MESSAGE,
     REVIEW_MESSAGE,
@@ -70,6 +71,8 @@ def _case_for_patient(case_id: str) -> Case:
     token = request.headers.get("X-Case-Token", "")
     if not case or not token or not hmac.compare_digest(case.token_hash, _hash_token(token)):
         abort(404)
+    session['appointment_case_id'] = case.id
+    session['appointment_case_hash'] = case.token_hash
     return case
 
 
@@ -95,6 +98,7 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
         "created_at": case.created_at.isoformat(),
         "ai_mode": ai_mode,
         "ai_provider": provider if ai_mode == "ai" else None,
+        "appointment_referral": recommend_department(case),
     }
     if include_messages:
         data["messages"] = [
@@ -308,6 +312,8 @@ def create_case():
     db.session.commit()
 
     payload = _case_json(case)
+    session['appointment_case_id'] = case.id
+    session['appointment_case_hash'] = case.token_hash
     payload["token"] = token
     return jsonify(payload), 201
 
