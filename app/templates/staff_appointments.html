@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}จัดการนัดหมาย · หมอพร้อมคุย{% endblock %}
+{% block content %}
+<section class="appointment-page">
+  <span class="eyebrow">DOCTOR CALENDARS</span><h1>จัดการนัดหมาย</h1>
+  <div class="appointment-demo">ตารางหมอสมมติสำหรับทดลอง เจ้าหน้าที่เพิ่มคิว ปิดรับคิว และยกเลิกนัดได้แยกตามแพทย์</div>
+  <section class="appointment-panel">
+    <form method="get" class="appointment-filters">
+      <label>แพทย์<select name="doctor">{% for doctor in doctors %}<option value="{{ doctor.id }}" {% if doctor.id == selected.id %}selected{% endif %}>{{ doctor.name }} · {{ doctor.specialty }}</option>{% endfor %}</select></label>
+      <label>วัน / เดือน / ปี<input type="date" name="day" value="{{ day.isoformat() }}" min="{{ today.isoformat() }}" max="{{ maximum.isoformat() }}" required></label>
+      <button class="button button-primary" type="submit">ดูตาราง</button>
+    </form>
+    <h2>{{ selected.name }} · {{ day|appointment_date }}</h2><p>{{ selected.schedule_label }}</p>
+    <div class="staff-slot-list">
+      {% for slot in slots %}<article class="staff-slot">
+        <strong>{{ slot.starts_at|bangkok_time('%H:%M') }}</strong><span>{{ {'free':'ว่าง', 'blocked':'ปิดรับ', 'booked':'จองแล้ว'}.get(slot.state, slot.state) }}</span>
+        {% if slot.state in ['free', 'blocked'] and slot.starts_at|appointment_future %}
+        <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="slot_id" value="{{ slot.id }}"><input type="hidden" name="action" value="{{ 'block' if slot.state == 'free' else 'open' }}"><button class="button button-ghost button-small" type="submit">{{ 'ปิดรับคิวนี้' if slot.state == 'free' else 'เปิดรับคิวนี้' }}</button></form>
+        {% endif %}
+      </article>{% else %}<p>ยังไม่มีคิวในวันนี้ เพิ่มเวลาเฉพาะวันได้ด้านล่าง</p>{% endfor %}
+    </div>
+    <h3>เพิ่มคิวเฉพาะวัน</h3><p class="appointment-muted">คิวละ 30 นาที เลือกเวลาเต็มชั่วโมงหรือครึ่งชั่วโมง ระหว่าง 08:00–17:30</p>
+    <form method="post" class="appointment-filters"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="action" value="add"><label>เวลาเริ่ม<input type="time" name="time" min="08:00" max="17:30" step="1800" required></label><button class="button button-primary" type="submit">เพิ่มคิว</button></form>
+  </section>
+  <section class="appointment-panel"><h2>รายการนัดของวันนี้</h2>
+    {% for item in bookings %}<article class="appointment-receipt"><div><strong>{{ item.reference }}</strong><p>{{ item.starts_at|bangkok_time('%H:%M') }} น. · {{ 'ยืนยันนัดทดลอง' if item.status == 'booked' else 'ยกเลิกแล้ว' }}</p></div>
+      {% if item.status == 'booked' and item.starts_at|appointment_future %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="appointment_id" value="{{ item.id }}"><button type="submit" class="button button-ghost">ยกเลิกและคืนคิว</button></form>{% endif %}
+    </article>{% else %}<p>ยังไม่มีนัดสำหรับแพทย์คนนี้ในวันที่เลือก</p>{% endfor %}
+  </section>
+</section>
+{% endblock %}

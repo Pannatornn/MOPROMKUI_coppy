@@ -50,6 +50,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     from . import routes
 
     routes.init_app(app)
+    from . import appointments
+    appointments.init_app(app)
 
     @app.after_request
     def security_headers(response):
