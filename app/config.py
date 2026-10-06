@@ -34,6 +34,7 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-terra")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")
     GEMINI_BASE_URL = os.getenv(
         "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
     )
