@@ -168,6 +168,13 @@ def _gemini_turn(case: Case) -> AIResult:
             # Log status only: error bodies can contain keys or patient text.
             logger.warning("Gemini native request failed: %s (HTTP %s)", code, response.status_code)
             if response.status_code >= 500 and attempt == 0 and deadline - time.monotonic() > 1.0:
+                # If schema-constrained generation fails, use JSON mode for
+                # the retry. The same local schema still validates the output.
+                schema = payload["generationConfig"].pop("responseJsonSchema")
+                payload["systemInstruction"]["parts"].append({"text":
+                    "Return only a JSON object matching this schema. "
+                    "Do not include markdown or extra text: " + json.dumps(schema, ensure_ascii=False)
+                })
                 time.sleep(1.0)
                 continue
             return _fallback(case, code)
