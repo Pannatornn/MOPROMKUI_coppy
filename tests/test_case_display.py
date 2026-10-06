@@ -1,4 +1,5 @@
 import re
+import pytest
 from datetime import datetime, timezone
 from app.case_display import dashboard_counts, current_review
 from app.extensions import db
@@ -102,3 +103,31 @@ def test_review_auth_validation_and_closed_referral(app, client):
     assert client.post(url, data=form).status_code == 302
     with app.app_context():
         assert recommend_department(db.session.get(Case, case['id']))['state'] == 'closed'
+
+
+@pytest.mark.parametrize('complaint,urgency,department,expected', [
+    ('ข้อมูลสมมติ: ปวดท้องเล็กน้อย', 'urgent', 'gynecology', 'ไม่ตรงกับการอนุมัติคิวนัดปกติ'),
+    ('ข้อมูลสมมติ: ปวดท้องเล็กน้อย', 'routine', '', 'กรุณาเลือกแผนกสำหรับการนัด'),
+    ('ข้อมูลสมมติ: หายใจไม่ออก', 'routine', 'general', 'กฎคัดกรองพบสัญญาณที่อาจฉุกเฉิน'),
+])
+def test_review_validation_keeps_form_and_explains_actual_reason(app, client, complaint,
+                                                               urgency, department, expected):
+    case = create_case(client, complaint).json
+    csrf = login(client)
+    form = {'csrf_token': csrf, 'urgency': urgency, 'department': department,
+            'disposition': 'appointment', 'guidance': 'ข้อความทดสอบ <script>alert(1)</script>'}
+    response = client.post(f"/staff/cases/{case['id']}/review", data=form)
+    assert response.status_code == 400
+    html = response.get_data(as_text=True)
+    assert expected in html
+    assert 'ยังไม่ได้บันทึกผล' in html and 'name="guidance"' in html
+    assert 'Emergency screening cannot' not in html
+    assert f'value="{urgency}" selected' in html
+    assert 'value="appointment" selected' in html
+    if department:
+        assert f'value="{department}" selected' in html
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in html
+    with app.app_context():
+        record = db.session.get(Case, case['id'])
+        assert record.clinician_urgency is None
+        assert current_review(record) is None
