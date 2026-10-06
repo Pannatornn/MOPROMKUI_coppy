@@ -107,6 +107,8 @@ def test_gemini_structured_output_path(app, monkeypatch):
 
     class FakeOpenAI:
         def __init__(self, **kwargs):
+            assert kwargs["timeout"] == 90.0
+            assert kwargs["max_retries"] == 0
             assert kwargs["api_key"] == "gemini-key-test"
             assert kwargs["base_url"] == "https://generativelanguage.googleapis.com/v1beta/openai/"
             self.beta = SimpleNamespace(
