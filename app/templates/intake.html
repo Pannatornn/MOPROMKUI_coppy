@@ -57,9 +57,10 @@
       <div><span class="eyebrow">GUIDED INTERVIEW</span><h2>ซักประวัติ</h2><span id="ai-mode" class="ai-mode">กำลังเชื่อมต่อ AI</span></div>
       <div class="chat-actions"><div class="case-reference">รหัสเคส <strong id="case-reference">—</strong></div><button id="new-case-button" class="button button-ghost button-small" type="button">＋ เริ่มเคสใหม่</button></div>
     </div>
-    <div class="interview-progress"><div><span id="question-progress">กำลังเริ่มต้น</span><small>ระบบจะถามประมาณ 8–12 คำถามตามความจำเป็น</small></div><div class="progress-track"><i id="progress-fill"></i></div></div>
+    <div class="interview-progress"><div><span id="question-progress">กำลังเริ่มต้น</span><small>โดยทั่วไปเก็บข้อมูล 8–12 ข้อความ อาจหยุดก่อนเมื่อพบความเสี่ยง</small></div><div class="progress-track"><i id="progress-fill"></i></div></div>
     <div class="chat-disclaimer"><span>i</span> ตอบเฉพาะข้อมูลสุขภาพ โปรดอย่าใส่ชื่อ เบอร์โทร เลขบัตร หรือที่อยู่</div>
     <div id="case-status" class="case-status status-collecting" aria-live="polite"><strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span></div>
+    <section id="staff-review-result" class="appointment-panel" aria-live="polite" hidden><span class="eyebrow">เจ้าหน้าที่ประเมินแล้ว</span><h2 id="staff-review-urgency"></h2><p id="staff-review-guidance"></p><p class="appointment-muted">หน้านี้ตรวจผลใหม่ทุก 15 วินาทีขณะเปิดอยู่ การประเมินไม่ใช่การยืนยันนัด</p></section>
     <section id="appointment-referral" class="appointment-panel" hidden>
       <span class="eyebrow">แผนกแนะนำเบื้องต้น</span><h2 id="referral-label"></h2><p id="referral-reason"></p>
       <p class="appointment-muted">ใช้กติกาเดโม ไม่ใช่การวินิจฉัย ระบบจะแสดงเฉพาะแพทย์และคิวในแผนกที่แนะนำ</p>
@@ -82,4 +83,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='9') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='10') }}" defer></script>{% endblock %}
