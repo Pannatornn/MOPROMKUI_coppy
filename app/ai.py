@@ -5,6 +5,9 @@ import json
 import logging
 import time
 
+import httpx
+from pydantic import ValidationError
+
 from flask import current_app
 
 from .credentials import get_api_key
@@ -21,8 +24,10 @@ FALLBACK_NOTICES = {
     "NotFoundError": "ไม่พบ model ที่ตั้งไว้ ผู้ดูแลควรตรวจค่า OPENAI_MODEL ใน Render",
     "RateLimitError": "API key นี้ถึงขีดจำกัดการใช้งาน ผู้ดูแลสามารถเปลี่ยน key ใหม่ในหน้า ตั้งค่า AI",
     "APITimeoutError": "AI ตอบช้ากว่ากำหนด ระบบจึงใช้คำถามสำรองชั่วคราว",
-    "InternalServerError": "บริการ AI ขัดข้องชั่วคราว ระบบจึงใช้คำถามสำรอง และจะลอง AI อีกครั้งเมื่อคุณตอบข้อความถัดไป",
     "APIConnectionError": "เชื่อมต่อ AI ไม่สำเร็จชั่วคราว ระบบจึงใช้คำถามสำรอง",
+    "InternalServerError": "บริการ AI ขัดข้องชั่วคราว ระบบจึงใช้คำถามสำรอง และจะลอง AI อีกครั้งเมื่อคุณตอบข้อความถัดไป",
+    "invalid_response": "AI ส่งคำตอบไม่ครบหรือรูปแบบไม่ถูกต้อง ระบบจึงใช้คำถามสำรองชั่วคราว",
+    "empty_or_refused": "AI ไม่ส่งคำตอบที่ใช้งานได้ ระบบจึงใช้คำถามสำรองชั่วคราว",
 }
 
 
@@ -123,52 +128,65 @@ def _request_payload(case: Case) -> dict:
 
 
 def _gemini_turn(case: Case) -> AIResult:
-    from openai import InternalServerError, OpenAI
-
-    client = OpenAI(
-        api_key=get_api_key("gemini"),
-        base_url=current_app.config["GEMINI_BASE_URL"],
-        # Structured responses can take longer than a short chat completion.
-        # Handle server errors explicitly within a shared time budget.
-        timeout=90.0,
-        max_retries=0,
-    )
-    request_options = dict(
-        model=current_app.config["GEMINI_MODEL"],
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    _request_payload(case), ensure_ascii=False, separators=(",", ":")
-                ),
-            },
-        ],
-        response_format=InterviewTurn,
-    )
+    # Use Google's native endpoint and validate the JSON locally. This avoids
+    # translating our schema through the OpenAI compatibility layer.
+    model = current_app.config["GEMINI_MODEL"].removeprefix("models/")
+    endpoint = "https://generativelanguage.googleapis.com/v1beta/models/"
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": json.dumps(
+            _request_payload(case), ensure_ascii=False, separators=(",", ":")
+        )}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseJsonSchema": InterviewTurn.model_json_schema(),
+        },
+    }
     deadline = time.monotonic() + 90.0
+    with httpx.Client() as client:
+        for attempt in range(2):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return _fallback(case, "APITimeoutError")
+            try:
+                response = client.post(
+                    endpoint + model + ":generateContent",
+                    headers={"x-goog-api-key": get_api_key("gemini")},
+                    json=payload,
+                    timeout=httpx.Timeout(remaining, connect=min(10.0, remaining)),
+                )
+            except httpx.TimeoutException:
+                return _fallback(case, "APITimeoutError")
+            except httpx.RequestError:
+                return _fallback(case, "APIConnectionError")
+            if response.is_success:
+                break
+            code = {
+                401: "AuthenticationError", 403: "PermissionDeniedError",
+                404: "NotFoundError", 429: "RateLimitError",
+            }.get(response.status_code, "InternalServerError" if response.status_code >= 500 else "BadRequestError")
+            # Log status only: error bodies can contain keys or patient text.
+            logger.warning("Gemini native request failed: %s (HTTP %s)", code, response.status_code)
+            if response.status_code >= 500 and attempt == 0 and deadline - time.monotonic() > 1.0:
+                time.sleep(1.0)
+                continue
+            return _fallback(case, code)
     try:
-        response = client.beta.chat.completions.parse(**request_options)
-    except InternalServerError:
-        # A brief backoff and one retry for 5xx only; never retry invalid keys
-        # or exhausted quota. Do not repeat the patient message in the database.
-        if deadline - time.monotonic() <= 1.0:
-            raise
-        time.sleep(1.0)
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise
-        logger.warning("Gemini server error: retrying once within request deadline")
-        response = client.with_options(timeout=remaining).beta.chat.completions.parse(
-            **request_options
-        )
-    parsed = response.choices[0].message.parsed if response.choices else None
-    if parsed is None:
+        data = response.json()
+        candidates = data.get("candidates", [])
+        if not candidates or candidates[0].get("finishReason") != "STOP":
+            return _fallback(case, "empty_or_refused")
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(part.get("text", "") for part in parts if not part.get("thought"))
+        parsed = InterviewTurn.model_validate_json(text)
+    except (ValueError, ValidationError, TypeError, AttributeError):
+        return _fallback(case, "invalid_response")
+    if not parsed.assistant_message.strip():
         return _fallback(case, "empty_or_refused")
     return AIResult(
         turn=parsed,
         provider="gemini",
-        request_id=getattr(response, "_request_id", None),
+        request_id=data.get("responseId"),
     )
 
 
