@@ -27,6 +27,7 @@ from .extensions import db, limiter
 from .models import AuditEvent, Case, Message, StaffUser
 from .prompts import PROMPT_VERSION
 from .referrals import recommend_department
+from .case_display import STATUS_LABELS, URGENCY_LABELS, current_review, dashboard_counts
 from .safety import (
     EMERGENCY_MESSAGE,
     REVIEW_MESSAGE,
@@ -99,6 +100,8 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
         "ai_mode": ai_mode,
         "ai_provider": provider if ai_mode == "ai" else None,
         "appointment_referral": recommend_department(case),
+        "staff_review": current_review(case),
+        "clinician_urgency": case.clinician_urgency,
     }
     if include_messages:
         data["messages"] = [
@@ -328,6 +331,8 @@ def get_case(case_id: str):
 @limiter.limit("15 per minute")
 def add_message(case_id: str):
     case = _case_for_patient(case_id)
+    if case.status in {"ready", "escalated"}:
+        return jsonify(_case_json(case)), 409
     if case.status == "closed":
         return _json_error("เคสนี้ปิดแล้ว", 409)
     if case.rule_urgency == "emergency":
@@ -394,7 +399,8 @@ def staff_logout():
 def staff_dashboard():
     staff_user = _staff_required()
     cases = db.session.scalars(db.select(Case).order_by(desc(Case.created_at)).limit(100)).all()
-    return render_template("staff_dashboard.html", cases=cases, staff_user=staff_user)
+    return render_template("staff_dashboard.html", cases=cases, staff_user=staff_user,
+                           counts=dashboard_counts(), snapshot_at=datetime.now(timezone.utc))
 
 
 @bp.get("/staff/cases/<case_id>")
@@ -403,7 +409,9 @@ def staff_case(case_id: str):
     case = db.get_or_404(Case, case_id)
     _audit(case, _staff_actor(staff_user), "case_viewed")
     db.session.commit()
-    return render_template("staff_case.html", case=case)
+    from .referrals import DEPARTMENTS
+    return render_template("staff_case.html", case=case, departments=DEPARTMENTS,
+                           review=current_review(case))
 
 
 @bp.post("/staff/cases/<case_id>/review")
@@ -412,16 +420,41 @@ def staff_review_case(case_id: str):
     _require_csrf()
     case = db.get_or_404(Case, case_id)
     urgency = request.form.get("urgency", "")
-    status = request.form.get("status", "")
+    status = request.form.get("status", case.status)
     if urgency not in URGENCY_OPTIONS or status not in STATUS_OPTIONS:
         abort(400)
+    from .referrals import DEPARTMENTS
+    disposition = request.form.get("disposition", "review_only")
+    department = request.form.get("department", "")
+    guidance = request.form.get("guidance", "").strip()
+    if disposition not in {"review_only", "appointment", "care", "wait", "continue", "closed"} or len(guidance) > 1000:
+        abort(400)
+    if disposition != "review_only" and not 3 <= len(guidance) <= 1000:
+        abort(400, "Patient guidance is required")
+    if disposition == "appointment":
+        texts = [case.chief_complaint] + [m.content for m in case.messages if m.role == "patient"]
+        if (department not in DEPARTMENTS or urgency not in {"routine", "soon"}
+                or case.rule_urgency == "emergency" or any(find_red_flags(t) for t in texts)):
+            abort(400, "Emergency screening cannot be approved for routine appointments")
+        status = "ready"
+    elif disposition == "care":
+        status = "escalated"
+    elif disposition == "wait":
+        status = "escalated"
+    elif disposition == "continue":
+        status = "collecting"
+    elif disposition == "closed":
+        status = "closed"
     case.clinician_urgency = urgency
     case.status = status
     _audit(
         case,
         _staff_actor(staff_user),
         "clinical_review_updated",
-        {"urgency": urgency, "status": status},
+        {"urgency": urgency, "status": status, "disposition": disposition,
+         "department": department if disposition == "appointment" else None,
+         "guidance": guidance,
+         "patient_message_ids": [m.id for m in case.messages if m.role == "patient"]},
     )
     db.session.commit()
     return redirect(url_for("main.staff_case", case_id=case.id))
@@ -555,3 +588,4 @@ def staff_user_password(user_id: int):
 def init_app(app):
     app.register_blueprint(bp)
     app.jinja_env.globals["csrf_token"] = _csrf_token
+    app.jinja_env.globals.update(status_labels=STATUS_LABELS, urgency_labels=URGENCY_LABELS)
