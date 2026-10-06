@@ -2,6 +2,7 @@
 set -eu
 
 flask --app app:create_app init-db
+flask --app app:create_app seed-appointments
 flask --app app:create_app ensure-admin
 exec gunicorn \
   --bind "0.0.0.0:${PORT:-8000}" \
