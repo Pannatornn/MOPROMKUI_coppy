@@ -91,7 +91,9 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
     else:
         provider = None
         ai_mode = "pending"
+    from .appointments import request_json
     data = {
+        "appointment_request": request_json(case),
         "id": case.id,
         "reference": case.reference,
         "status": case.status,

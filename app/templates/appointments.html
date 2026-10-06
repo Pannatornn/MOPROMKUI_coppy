@@ -2,8 +2,8 @@
 {% block title %}นัดหมายแพทย์ · หมอพร้อมคุย{% endblock %}
 {% block content %}
 <section class="appointment-page">
-  <span class="eyebrow">GUIDED APPOINTMENTS</span><h1>ระบบแนะนำแผนก<br>คุณเลือกเวลาที่สะดวก</h1>
-  <p class="appointment-intro">ซักประวัติ → แผนกที่แนะนำ → แพทย์ในแผนก → วันและคิวว่าง</p>
+  <span class="eyebrow">GUIDED APPOINTMENTS</span><h1>นัดหมายแพทย์</h1>
+  <p class="appointment-intro">เลือกหมอและเวลานัด หรือให้เจ้าหน้าที่จัดนัดให้คุณ</p>
   <div class="appointment-demo"><strong>ระบบนัดหมายทดลอง</strong> ใช้หมอและตารางสมมติ ยังไม่ใช่การนัดกับโรงพยาบาลจริง · เวลาไทย · คิวละ 30 นาที</div>
   <section class="appointment-panel referral-panel">
     <span class="eyebrow">1. แผนกจากข้อมูลซักประวัติ</span><h2>{{ referral.label }}</h2><p>{{ referral.reason }}</p>
@@ -11,7 +11,14 @@
     {% if referral.state == 'ready' %}<p class="appointment-muted">{{ 'เจ้าหน้าที่ระบุแผนกและอนุมัติให้นัดแล้ว' if referral.source == 'staff' else 'แนะนำเบื้องต้นตามกติกาเดโม ไม่ใช่การวินิจฉัย' }} แสดงเฉพาะหมอในแผนกนี้ หากข้อมูลอาการเปลี่ยนให้ซักประวัติใหม่หรือให้เจ้าหน้าที่ตรวจ</p>{% endif %}
     {% if referral.state in ['missing', 'collecting'] %}<a class="button button-primary" href="{{ url_for('main.intake') }}">{{ 'ซักประวัติต่อ' if case else 'เริ่มซักประวัติ' }}</a>{% elif referral.state == 'emergency' %}<a class="button button-primary" href="tel:1669">โทร 1669</a>{% endif %}
   </section>
-  {% if not doctors %}{% if referral.state == 'ready' %}<p>แผนกนี้ยังไม่มีตารางแพทย์ กรุณาติดต่อเจ้าหน้าที่ จะไม่เปลี่ยนแผนกเพื่อหาคิวแทน</p>{% endif %}{% else %}
+  {% if ticket %}<section class="appointment-panel"><h2>คำขอนัดของคุณ · {{ ticket.reference }}</h2>
+    {% if ticket.status == 'confirmed' %}<strong>{{ 'นัดถูกยกเลิกแล้ว' if ticket.appointment_status == 'cancelled' else 'ยืนยันนัดแล้ว' }} · {{ ticket.appointment_reference }}</strong><p>{{ ticket.doctor }} · {{ ticket.department }} · {{ ticket.time }} น. เวลาไทย</p>{% else %}<p>ส่งคำขอแล้ว ยังไม่ยืนยันวันเวลา เจ้าหน้าที่จะเห็นคำขอในหน้าจัดการนัดหมาย</p><p class="appointment-muted">หน้านี้อัปเดตผลทุก 15 วินาทีขณะเปิดอยู่ หรือดูจากหน้าซักประวัติ ไม่มีการส่ง SMS/โทรแจ้งอัตโนมัติ หากอาการเร่งด่วนให้ติดต่อสถานพยาบาลโดยตรง</p>{% endif %}
+    {% if ticket.status == 'confirmed' and ticket.appointment_status == 'booked' and ticket.cancellable %}<form method="post" action="{{ url_for('appointments.cancel', appointment_id=ticket.appointment_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-ghost" type="submit">ยกเลิกนัดนี้</button></form>{% elif ticket.appointment_status == 'cancelled' %}<form method="post" action="{{ url_for('appointments.request_appointment') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="case_id" value="{{ case.id }}"><button class="button button-primary" type="submit">ขอนัดใหม่</button></form>{% endif %}
+  </section>{% elif case and referral.state != 'ready' %}<section class="appointment-panel"><h2>ให้เจ้าหน้าที่จัดนัดให้</h2><p>ไม่ต้องเลือกแผนกเอง ส่งคำขอด้วยปุ่มเดียว เจ้าหน้าที่ตรวจข้อมูลและจัดแพทย์กับเวลานัดให้</p>
+    {% if referral.state in ['emergency', 'review'] %}<p class="appointment-muted">การขอนัดนี้ไม่ใช่การรับบริการฉุกเฉินและไม่ยืนยันว่าจะมีคนรับเรื่องทันที ให้เข้ารับการดูแลตามคำแนะนำด้านบน ส่วนคำขอนัดใช้จัดการนัดติดตามภายหลังได้</p>{% endif %}
+    <form method="post" action="{{ url_for('appointments.request_appointment') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="case_id" value="{{ case.id }}"><button type="submit" class="button button-primary">ส่งคำขอนัด →</button></form>
+  </section>{% endif %}
+  {% if not doctors %}{% if referral.state == 'ready' and not ticket %}<p>แผนกนี้ยังไม่มีตารางแพทย์ กรุณาติดต่อเจ้าหน้าที่ จะไม่เปลี่ยนแผนกเพื่อหาคิวแทน</p>{% endif %}{% else %}
   <h2>2. แพทย์ในแผนก{{ referral.label }}</h2>
   <div class="doctor-grid">
     {% for doctor in doctors %}
@@ -48,13 +55,15 @@
     {% else %}<div class="appointment-empty">ไม่มีคิวว่างในวันนี้ ลองเลือกวันว่างจากบัตรแพทย์ด้านบน หรือเลือกหมอคนอื่น</div>{% endif %}
   </section>
   {% endif %}<section class="appointment-panel">
-    <h2>นัดของคุณในเบราว์เซอร์นี้</h2><p class="appointment-muted">เก็บรหัสนัดไว้สำหรับอ้างอิง รายการนี้ผูกกับเซสชันของเบราว์เซอร์ และอาจหายเมื่อออกจากระบบหรือล้างคุกกี้</p>
-    {% for item in bookings %}
+    <h2>{{ 'นัดอื่นในเบราว์เซอร์นี้' if ticket else 'นัดของคุณในเบราว์เซอร์นี้' }}</h2><p class="appointment-muted">เก็บรหัสนัดไว้สำหรับอ้างอิง รายการนี้ผูกกับเซสชันของเบราว์เซอร์ และอาจหายเมื่อออกจากระบบหรือล้างคุกกี้</p>
+    {% for item in bookings if not ticket or item.id != ticket.appointment_id %}
     <article class="appointment-receipt">
       <div><strong>{{ item.reference }}</strong><h3>{{ item.doctor.name }}</h3><p>{{ (item.starts_at|appointment_local).date()|appointment_date }} · {{ item.starts_at|bangkok_time('%H:%M') }} น.</p><span class="appointment-status">{{ 'ยืนยันนัดทดลอง' if item.status == 'booked' else 'ยกเลิกแล้ว' }}</span></div>
       {% if item.status == 'booked' and item.starts_at|appointment_future %}<form method="post" action="{{ url_for('appointments.cancel', appointment_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="button button-ghost">ยกเลิกนัด</button></form>{% endif %}
     </article>
-    {% else %}<p>ยังไม่มีนัด เลือกเวลาที่ว่างเพื่อทดลองจองได้เลย</p>{% endfor %}
+    {% else %}<p>{{ 'ไม่มีนัดอื่นในเซสชันนี้' if ticket else 'ยังไม่มีนัด เลือกเวลาที่ว่างเพื่อทดลองจองได้เลย' }}</p>{% endfor %}
   </section>
 </section>
 {% endblock %}
+
+{% block scripts %}{% if ticket and ticket.status == 'pending' %}<script src="{{ url_for('static', filename='appointment_status.js', v='1') }}" defer></script>{% endif %}{% endblock %}

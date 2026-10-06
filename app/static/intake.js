@@ -113,10 +113,18 @@
     messageForm.hidden = closedForPatient;
     const referral = data.appointment_referral;
     const referralPanel = document.querySelector('#appointment-referral');
-    referralPanel.hidden = !referral || referral.state !== 'ready';
+    referralPanel.hidden = !referral;
     if (!referralPanel.hidden) {
       document.querySelector('#referral-label').textContent = referral.label;
       document.querySelector('#referral-reason').textContent = referral.reason;
+      document.querySelector('#appointment-next-link').textContent = referral.state === 'ready' ? 'เลือกหมอและเวลานัด →' : 'นัดหมาย / ส่งคำขอนัด →';
+    }
+    const ticket = data.appointment_request;
+    document.querySelector('#appointment-request-result').hidden = !ticket;
+    if (ticket) {
+      document.querySelector('#appointment-request-text').textContent = ticket.status === 'confirmed'
+        ? (ticket.appointment_status === 'cancelled' ? `นัด ${ticket.appointment_reference} ยกเลิกแล้ว` : `ยืนยันนัด ${ticket.appointment_reference} · ${ticket.doctor} · ${ticket.time} น. เวลาไทย`)
+        : `ส่งคำขอ ${ticket.reference} แล้ว ยังไม่ยืนยันวันเวลา ดูสถานะจากหน้านี้ หากเร่งด่วนให้ติดต่อสถานพยาบาลโดยตรง`;
     }
   };
 
@@ -149,6 +157,7 @@
     document.querySelector("#case-status").hidden = true;
     document.querySelector('#appointment-referral').hidden = true;
     document.querySelector('#staff-review-result').hidden = true;
+    document.querySelector('#appointment-request-result').hidden = true;
     setError("#setup-error", "");
     setError("#chat-error", "");
     chatPanel.hidden = true;
