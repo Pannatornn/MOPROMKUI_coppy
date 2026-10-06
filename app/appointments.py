@@ -2,6 +2,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 import secrets
+import hmac
 
 import click
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .extensions import db, limiter
 from .routes import _require_csrf, _staff_required
+from .models import Case
+from .referrals import recommend_department
 
 BANGKOK = timezone(timedelta(hours=7))
 bp = Blueprint("appointments", __name__)
@@ -19,6 +22,17 @@ DEMO_DOCTORS = [
     ("demo-mint", "พญ.มินตรา", "เวชปฏิบัติทั่วไป", {0, 2, 4}, 9, 12, "จันทร์ · พุธ · ศุกร์ 09:00–12:00"),
     ("demo-nont", "นพ.นนทกร", "อายุรกรรม", {1, 3}, 13, 16, "อังคาร · พฤหัสบดี 13:00–16:00"),
     ("demo-pim", "พญ.พิมพ์ชนก", "ผิวหนัง", {2, 5}, 10, 14, "พุธ · เสาร์ 10:00–14:00"),
+    ("demo-general-2", "นพ.ธนา", "เวชปฏิบัติทั่วไป", {1, 3, 5}, 13, 16, "อังคาร · พฤหัสบดี · เสาร์ 13:00–16:00"),
+    ("demo-medicine-2", "พญ.กมล", "อายุรกรรม", {0, 2, 4}, 9, 12, "จันทร์ · พุธ · ศุกร์ 09:00–12:00"),
+    ("demo-skin-2", "นพ.ปกรณ์", "ผิวหนัง", {1, 4}, 13, 16, "อังคาร · ศุกร์ 13:00–16:00"),
+    ("demo-ortho-1", "นพ.ภัทร", "กระดูกและข้อ", {0, 3}, 9, 12, "จันทร์ · พฤหัสบดี 09:00–12:00"),
+    ("demo-ortho-2", "พญ.ณิชา", "กระดูกและข้อ", {2, 5}, 13, 16, "พุธ · เสาร์ 13:00–16:00"),
+    ("demo-ent-1", "นพ.วริน", "หู คอ จมูก", {1, 4}, 9, 12, "อังคาร · ศุกร์ 09:00–12:00"),
+    ("demo-ent-2", "พญ.รินรดา", "หู คอ จมูก", {0, 3}, 13, 16, "จันทร์ · พฤหัสบดี 13:00–16:00"),
+    ("demo-gyn-1", "พญ.ลลิตา", "สูติ–นรีเวช", {0, 2}, 9, 12, "จันทร์ · พุธ 09:00–12:00"),
+    ("demo-gyn-2", "พญ.ชลธิชา", "สูติ–นรีเวช", {3, 5}, 13, 16, "พฤหัสบดี · เสาร์ 13:00–16:00"),
+    ("demo-peds-1", "พญ.ชญา", "กุมารเวช", {1, 3}, 9, 12, "อังคาร · พฤหัสบดี 09:00–12:00"),
+    ("demo-peds-2", "นพ.นที", "กุมารเวช", {2, 5}, 13, 16, "พุธ · เสาร์ 13:00–16:00"),
 ]
 
 
@@ -52,6 +66,17 @@ class Appointment(db.Model):
     status: Mapped[str] = mapped_column(db.String(16), default="booked")
     created_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     doctor: Mapped[Doctor] = relationship()
+    referral: Mapped['AppointmentReferral | None'] = relationship(back_populates='appointment', cascade='all, delete-orphan', uselist=False)
+
+
+class AppointmentReferral(db.Model):
+    __tablename__ = 'appointment_referrals'
+    appointment_id: Mapped[int] = mapped_column(ForeignKey('appointments.id'), primary_key=True)
+    case_id: Mapped[str | None] = mapped_column(ForeignKey('cases.id', ondelete='SET NULL'), nullable=True)
+    department: Mapped[str] = mapped_column(db.String(32))
+    reason: Mapped[str] = mapped_column(db.String(260))
+    appointment: Mapped[Appointment] = relationship(back_populates='referral')
+    case: Mapped[Case | None] = relationship()
 
 
 def _now():
@@ -87,15 +112,30 @@ def _parse_day(value):
     return day
 
 
+def _referral_context():
+    case = db.session.get(Case, session.get('appointment_case_id')) if session.get('appointment_case_id') else None
+    if not case or not hmac.compare_digest(case.token_hash, session.get('appointment_case_hash', '')):
+        return None, {'state': 'missing', 'department': None, 'label': 'เริ่มซักประวัติก่อนนัด',
+                      'reason': 'ระบบต้องมีข้อมูลอาการเพื่อแนะนำแผนก คุณไม่ต้องเลือกแผนกเอง'}
+    return case, recommend_department(case)
+
+
 @bp.get("/appointments")
 def booking():
     owner = _owner()
-    doctors = db.session.scalars(db.select(Doctor).order_by(Doctor.id)).all()
+    bookings = db.session.scalars(db.select(Appointment).where(
+        Appointment.owner_hash == owner,
+    ).order_by(Appointment.starts_at.desc()).limit(30)).all()
+    case, referral = _referral_context()
+    doctors = db.session.scalars(db.select(Doctor).where(Doctor.specialty == referral['label']).order_by(Doctor.id)).all() if referral['state'] == 'ready' else []
     if not doctors:
-        return render_template("appointments.html", doctors=[], selected=None, slots=[], bookings=[], upcoming={})
+        return render_template("appointments.html", doctors=[], selected=None, slots=[], bookings=bookings, upcoming={}, referral=referral, case=case)
     selected = db.session.get(Doctor, request.args.get("doctor", doctors[0].id))
     if selected is None:
         abort(404)
+    if selected.specialty != referral['label']:
+        flash('ระบบแสดงเฉพาะแพทย์ในแผนกที่แนะนำสำหรับเคสนี้', 'error')
+        return redirect(url_for('appointments.booking'), code=303)
     future = db.session.scalars(db.select(AppointmentSlot).where(
         AppointmentSlot.starts_at > _now(), AppointmentSlot.state == "free",
         AppointmentSlot.starts_at < _day_range(_today() + timedelta(days=29))[0],
@@ -112,18 +152,22 @@ def booking():
         AppointmentSlot.doctor_id == selected.id, AppointmentSlot.starts_at >= start,
         AppointmentSlot.starts_at < end, AppointmentSlot.starts_at > _now(),
     ).order_by(AppointmentSlot.starts_at)).all()
-    bookings = db.session.scalars(db.select(Appointment).where(
-        Appointment.owner_hash == owner,
-    ).order_by(Appointment.starts_at.desc()).limit(30)).all()
     return render_template("appointments.html", doctors=doctors, selected=selected, day=day,
-        slots=slots, bookings=bookings, upcoming=upcoming, today=_today(), maximum=_today() + timedelta(days=28))
+        slots=slots, bookings=bookings, upcoming=upcoming, today=_today(), maximum=_today() + timedelta(days=28), referral=referral, case=case)
 
 
 @bp.post("/appointments/book")
 @limiter.limit("10 per minute")
 def book():
     _require_csrf()
+    case, referral = _referral_context()
+    if referral['state'] != 'ready':
+        abort(409, 'Complete intake and obtain a routine referral before booking')
+    if request.form.get('case_id') != case.id:
+        abort(409, 'Intake case changed; refresh the booking page')
     slot = db.get_or_404(AppointmentSlot, request.form.get("slot_id", type=int))
+    if slot.doctor.specialty != referral['label']:
+        abort(409, 'Doctor is outside the recommended department')
     # Claim the slot in the database, so simultaneous bookings cannot both win.
     claimed = db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(
         AppointmentSlot.id == slot.id, AppointmentSlot.state == "free",
@@ -136,6 +180,7 @@ def book():
         return redirect(url_for("appointments.booking", doctor=slot.doctor_id), code=303)
     appointment = Appointment(reference="APT-" + secrets.token_hex(4).upper(), owner_hash=_owner(),
         slot_id=slot.id, doctor_id=slot.doctor_id, starts_at=slot.starts_at)
+    appointment.referral = AppointmentReferral(case_id=case.id, department=referral['department'], reason=referral['reason'])
     db.session.add(appointment)
     try:
         db.session.commit()
