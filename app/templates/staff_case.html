@@ -37,15 +37,20 @@
 
   <aside class="review-sidebar">
     <section class="review-card decision-card"><span class="eyebrow">CLINICAL DECISION</span><h2>ยืนยันโดยบุคลากร</h2>
+      {% set entered = review_form or {} %}
+      {% set selected_urgency = entered.get('urgency', case.clinician_urgency or '') %}
+      {% set selected_disposition = entered.get('disposition', review.disposition if review else 'wait') %}
+      {% set selected_department = entered.get('department', review.department if review else '') %}
+      {% if review_error %}<div class="form-error" role="alert" tabindex="-1" autofocus><strong>ยังไม่ได้บันทึกผล</strong><p>{{ review_error }}</p></div>{% endif %}
       <form method="post" action="{{ url_for('main.staff_review_case', case_id=case.id) }}" class="form-stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>ระดับความเร่งด่วน<select name="urgency" required><option value="">เลือกระดับหลังประเมิน</option>{% for value in ['routine', 'soon', 'urgent', 'emergency'] %}<option value="{{ value }}" {% if case.clinician_urgency == value %}selected{% endif %}>{{ urgency_labels[value] }}</option>{% endfor %}</select></label>
+        <label>ระดับความเร่งด่วน<select name="urgency" required><option value="">เลือกระดับหลังประเมิน</option>{% for value in ['routine', 'soon', 'urgent', 'emergency'] %}<option value="{{ value }}" {% if selected_urgency == value %}selected{% endif %}>{{ urgency_labels[value] }}</option>{% endfor %}</select></label>
         <p>สถานะปัจจุบัน: {{ status_labels.get(case.status, case.status) }} · สถานะใหม่จะเปลี่ยนตามขั้นตอนที่เลือกด้านล่าง</p>
         <label>ขั้นตอนให้ผู้รับบริการ<select name="disposition" required>
-          <option value="continue" {% if review and review.disposition == 'continue' %}selected{% endif %}>ขอข้อมูลซักประวัติเพิ่ม</option><option value="closed" {% if review and review.disposition == 'closed' %}selected{% endif %}>ปิดเคส</option><option value="wait" {% if not review or review.disposition in ['wait', 'review_only'] %}selected{% endif %}>รอดำเนินการโดยเจ้าหน้าที่</option><option value="appointment" {% if review and review.disposition == 'appointment' %}selected{% endif %}>อนุมัตินัดในแผนกที่ระบุ</option><option value="care" {% if review and review.disposition == 'care' %}selected{% endif %}>เข้ารับการดูแลตามคำแนะนำ · ไม่เปิดคิวนัดปกติ</option>
+          <option value="continue" {% if selected_disposition == 'continue' %}selected{% endif %}>ขอข้อมูลซักประวัติเพิ่ม</option><option value="closed" {% if selected_disposition == 'closed' %}selected{% endif %}>ปิดเคส</option><option value="wait" {% if selected_disposition in ['wait', 'review_only'] %}selected{% endif %}>รอดำเนินการโดยเจ้าหน้าที่</option><option value="appointment" {% if selected_disposition == 'appointment' %}selected{% endif %}>อนุมัตินัดในแผนกที่ระบุ</option><option value="care" {% if selected_disposition == 'care' %}selected{% endif %}>เข้ารับการดูแลตามคำแนะนำ · ไม่เปิดคิวนัดปกติ</option>
         </select></label>
-        <label>แผนกสำหรับการนัด<select name="department"><option value="">เลือกแผนกเมื่ออนุมัตินัด</option>{% for key, label in departments.items() %}<option value="{{ key }}" {% if review and review.department == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-        <label>คำแนะนำที่ส่งกลับให้ผู้รับบริการ<textarea name="guidance" minlength="3" maxlength="1000" required>{{ review.guidance if review else '' }}</textarea></label>
+        <label>แผนกสำหรับการนัด<select name="department"><option value="">เลือกแผนกเมื่ออนุมัตินัด</option>{% for key, label in departments.items() %}<option value="{{ key }}" {% if selected_department == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>คำแนะนำที่ส่งกลับให้ผู้รับบริการ<textarea name="guidance" minlength="3" maxlength="1000" required>{{ entered.get('guidance', review.guidance if review else '') }}</textarea></label>
         <p class="ai-note">การอนุมัตินัดต้องเลือกระดับทั่วไปหรือควรตรวจเร็วและระบุแผนก เคสที่กฎพบสัญญาณฉุกเฉินไม่สามารถเปิดคิวนัดปกติได้ ผลนี้จะแสดงบนหน้าผู้ใช้เมื่ออัปเดตข้อมูล</p>
         <button class="button button-primary button-wide" type="submit">บันทึกผลและส่งขั้นตอนต่อ</button>
       </form>
