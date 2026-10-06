@@ -227,7 +227,12 @@ def test_gemini_retry_is_bounded_and_only_for_server_errors(
         assert result.provider == expected_provider
         assert len(case.messages) == 3
         if expected_calls == 2:
-            assert calls[0].content == calls[1].content
+            first = json.loads(calls[0].content)
+            second = json.loads(calls[1].content)
+            assert first["contents"] == second["contents"]
+            assert "responseJsonSchema" not in second["generationConfig"]
+            assert second["generationConfig"]["responseMimeType"] == "application/json"
+            assert "schema" in second["systemInstruction"]["parts"][-1]["text"]
             assert calls[1].extensions["timeout"]["read"] == 87.0
         if status == 503:
             assert "บริการ AI ขัดข้องชั่วคราว" in result.turn.assistant_message
