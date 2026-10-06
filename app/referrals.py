@@ -1,6 +1,7 @@
 """Demo clinic routing policy; not a diagnosis or validated referral protocol."""
 import re
 from .safety import _is_negated, find_red_flags, find_urgent_signals, normalize
+from .case_display import current_review
 
 DEPARTMENTS = {
     'general': 'เวชปฏิบัติทั่วไป', 'medicine': 'อายุรกรรม', 'skin': 'ผิวหนัง',
@@ -21,6 +22,18 @@ def recommend_department(case):
     if case.rule_urgency == 'emergency' or case.clinician_urgency == 'emergency' or any(find_red_flags(t) for t in texts):
         return {'state': 'emergency', 'department': None, 'label': 'ห้องฉุกเฉิน',
                 'reason': 'พบสัญญาณที่อาจฉุกเฉิน ไม่ควรรอคิวนัดปกติ ให้โทร 1669 หรือไปห้องฉุกเฉินทันที'}
+    if case.status == 'closed':
+        return {'state': 'closed', 'department': None, 'label': 'ปิดเคสแล้ว',
+                'reason': 'เคสนี้ปิดแล้ว หากต้องการนัดใหม่ให้เริ่มซักประวัติใหม่'}
+    review = current_review(case)
+    if review and review.get('disposition') == 'appointment' and review.get('department') in DEPARTMENTS and case.clinician_urgency in {'routine', 'soon'}:
+        department = review['department']
+        return {'state': 'ready', 'department': department, 'label': DEPARTMENTS[department],
+                'reason': review['guidance'], 'source': 'staff'}
+    if review and review.get('disposition') in {'care', 'wait'}:
+        return {'state': 'review', 'department': None,
+                'label': 'คำแนะนำจากเจ้าหน้าที่' if review['disposition'] == 'care' else 'รอเจ้าหน้าที่ดำเนินการ',
+                'reason': review['guidance'], 'source': 'staff'}
     if (case.status == 'escalated' or case.rule_urgency == 'urgent'
             or case.ai_urgency_suggestion in {'urgent', 'emergency'}
             or case.clinician_urgency in {'urgent', 'emergency'}
