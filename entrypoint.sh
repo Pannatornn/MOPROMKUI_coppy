@@ -7,7 +7,7 @@ exec gunicorn \
   --bind "0.0.0.0:${PORT:-8000}" \
   --workers "${GUNICORN_WORKERS:-2}" \
   --threads "${GUNICORN_THREADS:-4}" \
-  --timeout 45 \
+  --timeout 120 \
   --access-logfile - \
   --error-logfile - \
   --capture-output \
