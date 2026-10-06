@@ -201,11 +201,12 @@ def request_appointment():
         abort(409, 'Intake case changed; refresh the page')
     existing = db.session.get(AppointmentRequest, case.id)
     if existing and existing.appointment and existing.appointment.status == 'cancelled':
-        existing.status = 'pending'
-        existing.appointment = None
-        existing.owner_hash = _owner()
-        existing.urgency = _request_urgency(case)
-        db.session.add(AuditEvent(case=case, actor='patient', action='appointment_requested_again'))
+        changed = db.session.execute(update(AppointmentRequest).execution_options(synchronize_session=False).where(
+            AppointmentRequest.case_id == case.id, AppointmentRequest.status == 'confirmed',
+            AppointmentRequest.appointment_id == existing.appointment_id
+        ).values(status='pending', appointment_id=None, owner_hash=_owner(), urgency=_request_urgency(case))).rowcount
+        if changed:
+            db.session.add(AuditEvent(case=case, actor='patient', action='appointment_requested_again'))
         db.session.commit()
     elif not existing:
         db.session.add(AppointmentRequest(case=case, reference='REQ-' + secrets.token_hex(4).upper(),
