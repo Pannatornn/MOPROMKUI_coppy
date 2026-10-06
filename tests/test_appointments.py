@@ -9,11 +9,21 @@ def calendar(app):
     result = app.test_cli_runner().invoke(args=['seed-appointments'])
     assert result.exit_code == 0, result.output
     with app.app_context():
-        slot = db.session.scalar(db.select(AppointmentSlot).where(AppointmentSlot.state == 'free').order_by(AppointmentSlot.starts_at))
+        slot = db.session.scalar(db.select(AppointmentSlot).where(AppointmentSlot.state == 'free', AppointmentSlot.doctor_id == 'demo-mint').order_by(AppointmentSlot.starts_at))
         return slot.id, slot.doctor_id, _local(slot.starts_at).date().isoformat()
 
 
 def token(client):
+    from .conftest import create_case
+    from app.models import Case
+    with client.session_transaction() as session:
+        has_case = bool(session.get('appointment_case_id'))
+    if not has_case:
+        case = create_case(client, 'ปวดศีรษะเล็กน้อย').get_json()
+        with client.application.app_context():
+            db.session.get(Case, case['id']).status = 'ready'
+            db.session.commit()
+    client.get('/staff/login')
     assert client.get('/appointments').status_code == 200
     with client.session_transaction() as session:
         return session['_csrf_token']
@@ -23,11 +33,17 @@ def staff(client):
     client.post('/staff/login', data={'username': 'nurse', 'password': 'correct-horse-battery', 'csrf_token': token(client)})
 
 
+def book_form(client, slot_id):
+    csrf = token(client)
+    with client.session_transaction() as session:
+        return {'slot_id': slot_id, 'csrf_token': csrf, 'case_id': session['appointment_case_id']}
+
+
 def test_seed_distinct_schedules_and_preserve_states(app, calendar):
     with app.app_context():
         doctors = db.session.scalars(db.select(Doctor)).all()
-        assert len(doctors) == 3
-        assert len({d.schedule_label for d in doctors}) == 3
+        assert len(doctors) == 14
+        assert len({d.specialty for d in doctors}) == 7
         count = db.session.query(AppointmentSlot).count()
         slot = db.session.get(AppointmentSlot, calendar[0])
         slot.state = 'blocked'
@@ -41,7 +57,7 @@ def test_seed_distinct_schedules_and_preserve_states(app, calendar):
 def test_booking_private_and_duplicate_rejected(app, client, calendar):
     other = app.test_client()
     csrf = token(client)
-    assert client.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': csrf}).status_code == 303
+    assert client.post('/appointments/book', data=book_form(client, calendar[0])).status_code == 303
     with app.app_context():
         appointment = db.session.scalar(db.select(Appointment))
         reference = appointment.reference
@@ -49,7 +65,7 @@ def test_booking_private_and_duplicate_rejected(app, client, calendar):
     assert reference.encode() in client.get('/appointments').data
     other_csrf = token(other)
     assert reference.encode() not in other.get('/appointments').data
-    assert other.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': other_csrf}).status_code == 303
+    assert other.post('/appointments/book', data=book_form(other, calendar[0])).status_code == 303
     assert other.post(f'/appointments/{appointment_id}/cancel', data={'csrf_token': other_csrf}).status_code == 404
     with app.app_context():
         assert db.session.query(Appointment).count() == 1
@@ -57,12 +73,12 @@ def test_booking_private_and_duplicate_rejected(app, client, calendar):
 
 def test_cancel_rebook_and_repeat_cancel_safe(app, client, calendar):
     csrf = token(client)
-    client.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': csrf})
+    client.post('/appointments/book', data=book_form(client, calendar[0]))
     with app.app_context():
         appointment_id = db.session.scalar(db.select(Appointment.id))
     client.post(f'/appointments/{appointment_id}/cancel', data={'csrf_token': csrf})
     other = app.test_client()
-    other.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': token(other)})
+    other.post('/appointments/book', data=book_form(other, calendar[0]))
     client.post(f'/appointments/{appointment_id}/cancel', data={'csrf_token': csrf})
     with app.app_context():
         assert db.session.get(AppointmentSlot, calendar[0]).state == 'booked'
@@ -71,12 +87,13 @@ def test_cancel_rebook_and_repeat_cancel_safe(app, client, calendar):
 
 def test_csrf_dates_and_closed_slots(app, client, calendar):
     assert client.post('/appointments/book', data={'slot_id': calendar[0]}).status_code == 400
+    token(client)
     for day in ['invalid', (_today() - timedelta(days=1)).isoformat(), (_today() + timedelta(days=29)).isoformat()]:
         assert client.get('/appointments', query_string={'day': day}).status_code == 400
     with app.app_context():
         db.session.get(AppointmentSlot, calendar[0]).state = 'blocked'
         db.session.commit()
-    client.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': token(client)})
+    client.post('/appointments/book', data=book_form(client, calendar[0]))
     with app.app_context():
         assert db.session.query(Appointment).count() == 0
 
@@ -91,7 +108,7 @@ def test_staff_calendar_auth_close_and_add(app, client, calendar):
     with app.app_context():
         assert db.session.get(AppointmentSlot, calendar[0]).state == 'blocked'
     client.post('/staff/appointments', data=dict(data, action='open'))
-    client.post('/appointments/book', data={'slot_id': calendar[0], 'csrf_token': csrf})
+    client.post('/appointments/book', data=book_form(client, calendar[0]))
     client.post('/staff/appointments', data=dict(data, action='block'))
     with app.app_context():
         assert db.session.get(AppointmentSlot, calendar[0]).state == 'booked'

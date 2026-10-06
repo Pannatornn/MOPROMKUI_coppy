@@ -99,6 +99,13 @@
       status.innerHTML = "<strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span>";
     }
     messageForm.hidden = closedForPatient;
+    const referral = data.appointment_referral;
+    const referralPanel = document.querySelector('#appointment-referral');
+    referralPanel.hidden = !referral || referral.state !== 'ready';
+    if (!referralPanel.hidden) {
+      document.querySelector('#referral-label').textContent = referral.label;
+      document.querySelector('#referral-reason').textContent = referral.reason;
+    }
   };
 
   const api = async (url, options = {}) => {
@@ -124,6 +131,7 @@
     messageForm.reset();
     document.querySelector("#messages").replaceChildren();
     document.querySelector("#case-status").hidden = true;
+    document.querySelector('#appointment-referral').hidden = true;
     setError("#setup-error", "");
     setError("#chat-error", "");
     chatPanel.hidden = true;
