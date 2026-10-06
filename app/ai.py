@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import logging
+import time
 
 from flask import current_app
 
@@ -20,6 +21,7 @@ FALLBACK_NOTICES = {
     "NotFoundError": "ไม่พบ model ที่ตั้งไว้ ผู้ดูแลควรตรวจค่า OPENAI_MODEL ใน Render",
     "RateLimitError": "API key นี้ถึงขีดจำกัดการใช้งาน ผู้ดูแลสามารถเปลี่ยน key ใหม่ในหน้า ตั้งค่า AI",
     "APITimeoutError": "AI ตอบช้ากว่ากำหนด ระบบจึงใช้คำถามสำรองชั่วคราว",
+    "InternalServerError": "บริการ AI ขัดข้องชั่วคราว ระบบจึงใช้คำถามสำรอง และจะลอง AI อีกครั้งเมื่อคุณตอบข้อความถัดไป",
     "APIConnectionError": "เชื่อมต่อ AI ไม่สำเร็จชั่วคราว ระบบจึงใช้คำถามสำรอง",
 }
 
@@ -55,7 +57,7 @@ def _fallback(case: Case, error_code: str | None = None) -> AIResult:
         )
     else:
         assistant_message = questions[answered]
-        if error_code and answered == 0:
+        if error_code:
             notice = FALLBACK_NOTICES.get(
                 error_code, "AI ไม่พร้อมใช้งาน ระบบจึงใช้คำถามสำรองชั่วคราว"
             )
@@ -121,17 +123,17 @@ def _request_payload(case: Case) -> dict:
 
 
 def _gemini_turn(case: Case) -> AIResult:
-    from openai import OpenAI
+    from openai import InternalServerError, OpenAI
 
     client = OpenAI(
         api_key=get_api_key("gemini"),
         base_url=current_app.config["GEMINI_BASE_URL"],
         # Structured responses can take longer than a short chat completion.
-        # Keep one bounded attempt so retries cannot double the wait.
+        # Handle server errors explicitly within a shared time budget.
         timeout=90.0,
         max_retries=0,
     )
-    response = client.beta.chat.completions.parse(
+    request_options = dict(
         model=current_app.config["GEMINI_MODEL"],
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -144,6 +146,22 @@ def _gemini_turn(case: Case) -> AIResult:
         ],
         response_format=InterviewTurn,
     )
+    deadline = time.monotonic() + 90.0
+    try:
+        response = client.beta.chat.completions.parse(**request_options)
+    except InternalServerError:
+        # A brief backoff and one retry for 5xx only; never retry invalid keys
+        # or exhausted quota. Do not repeat the patient message in the database.
+        if deadline - time.monotonic() <= 1.0:
+            raise
+        time.sleep(1.0)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise
+        logger.warning("Gemini server error: retrying once within request deadline")
+        response = client.with_options(timeout=remaining).beta.chat.completions.parse(
+            **request_options
+        )
     parsed = response.choices[0].message.parsed if response.choices else None
     if parsed is None:
         return _fallback(case, "empty_or_refused")
