@@ -126,8 +126,10 @@ def _gemini_turn(case: Case) -> AIResult:
     client = OpenAI(
         api_key=get_api_key("gemini"),
         base_url=current_app.config["GEMINI_BASE_URL"],
-        timeout=25.0,
-        max_retries=1,
+        # Structured responses can take longer than a short chat completion.
+        # Keep one bounded attempt so retries cannot double the wait.
+        timeout=90.0,
+        max_retries=0,
     )
     response = client.beta.chat.completions.parse(
         model=current_app.config["GEMINI_MODEL"],
