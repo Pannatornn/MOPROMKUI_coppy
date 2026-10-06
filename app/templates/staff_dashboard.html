@@ -2,7 +2,7 @@
 {% block title %}แดชบอร์ดเจ้าหน้าที่ — หมอพร้อมคุย{% endblock %}
 {% block content %}
 <section class="dashboard-header">
-  <div><span class="eyebrow">CLINICAL WORKSPACE</span><h1>เคสผู้รับบริการ</h1><p>สวัสดี {{ staff_user.display_name }} · อัปเดตข้อมูลแบบเรียลไทม์</p></div>
+  <div><span class="eyebrow">CLINICAL WORKSPACE</span><h1>เคสผู้รับบริการ</h1><p>สวัสดี {{ staff_user.display_name }} · ข้อมูล ณ {{ snapshot_at | bangkok_time }} · โหลดหน้าใหม่เพื่ออัปเดต</p></div>
   <div class="dashboard-actions">
     {% if staff_user.role == 'admin' %}<a class="button button-ghost" href="{{ url_for('main.staff_users') }}">จัดการผู้ใช้</a>{% endif %}
     <a class="button button-primary" href="{{ url_for('main.intake') }}">＋ สร้างเคสทดสอบ</a>
@@ -10,29 +10,33 @@
 </section>
 
 <div class="dashboard-stats">
-  <article><span>เคสทั้งหมด</span><strong>{{ cases|length }}</strong><small>แสดงล่าสุดสูงสุด 100 เคส</small></article>
-  <article><span>ต้องตรวจเร่งด่วน</span><strong class="text-red">{{ cases|selectattr('rule_urgency', 'equalto', 'emergency')|list|length }}</strong><small>กฎพบสัญญาณฉุกเฉิน</small></article>
-  <article><span>พร้อมตรวจ</span><strong>{{ cases|selectattr('status', 'equalto', 'ready')|list|length }}</strong><small>AI ซักประวัติครบแล้ว</small></article>
-  <article><span>กำลังเก็บข้อมูล</span><strong>{{ cases|selectattr('status', 'equalto', 'collecting')|list|length }}</strong><small>ยังอยู่ระหว่างการตอบ</small></article>
+  <article><span>เคสทั้งหมดในฐานข้อมูล</span><strong data-count="total">{{ counts.total }}</strong><small>รวมทุกสถานะ รวมเคสที่ปิดแล้ว</small></article>
+  <article><span>เคสมีสัญญาณเร่งด่วน</span><strong class="text-red" data-count="urgent">{{ counts.urgent }}</strong><small>กฎ / AI / เจ้าหน้าที่ หรือส่งประเมิน · ไม่รวมปิดเคส</small></article>
+  <article><span>ข้อมูลพร้อมตรวจ</span><strong data-count="ready">{{ counts.ready }}</strong><small>ยังไม่ใช่จำนวนที่นัดแล้วหรืออนุมัติแล้ว</small></article>
+  <article><span>กำลังซักประวัติ</span><strong data-count="collecting">{{ counts.collecting }}</strong><small>ยังอยู่ระหว่างรวบรวมข้อมูล</small></article>
+  <article><span>ส่งต่อให้เจ้าหน้าที่</span><strong data-count="escalated">{{ counts.escalated }}</strong><small>รอประเมินหรือดำเนินการตามผลตรวจ</small></article>
+  <article><span>ปิดเคส</span><strong data-count="closed">{{ counts.closed }}</strong><small>สิ้นสุดการซักประวัติเคสนี้</small></article>
 </div>
+<p class="ai-note">ยอดสถานะ 4 กลุ่มรวมเท่ากับเคสทั้งหมด ส่วนยอดเร่งด่วนอาจซ้อนกับกลุ่มสถานะ · ตารางแสดงล่าสุด {{ cases|length }} เคส สูงสุด 100 เคส</p>
 
 <section class="workspace-card">
   <div class="workspace-toolbar"><div><h2>รายการเคสล่าสุด</h2><p>เรียงจากใหม่ไปเก่า</p></div><span class="role-badge">{{ staff_user.role|upper }}</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>รหัสเคส</th><th>เวลา</th><th>อาการสำคัญ</th><th>Rule</th><th>AI</th><th>สถานะ</th><th></th></tr></thead>
+      <thead><tr><th>รหัสเคส</th><th>เวลา</th><th>อาการสำคัญ</th><th>กฎคัดกรอง</th><th>AI เสนอ</th><th>เจ้าหน้าที่ประเมิน</th><th>สถานะ</th><th></th></tr></thead>
       <tbody>
         {% for case in cases %}
         <tr class="urgency-{{ case.rule_urgency }}">
           <td><strong class="case-code">{{ case.reference }}</strong></td>
           <td>{{ case.created_at | bangkok_time('%d/%m %H:%M') }}</td>
           <td class="complaint-cell">{{ case.chief_complaint }}</td>
-          <td><span class="badge badge-{{ case.rule_urgency }}">{{ case.rule_urgency }}</span></td>
-          <td><span class="badge badge-neutral">{{ case.ai_urgency_suggestion }}</span></td>
-          <td><span class="status-text status-{{ case.status }}">{{ case.status }}</span></td>
+          <td><span class="badge badge-{{ case.rule_urgency }}">{{ urgency_labels.get(case.rule_urgency, case.rule_urgency) }}</span></td>
+          <td><span class="badge badge-neutral">{{ urgency_labels.get(case.ai_urgency_suggestion, case.ai_urgency_suggestion) }}</span></td>
+          <td><span class="badge badge-neutral">{{ urgency_labels.get(case.clinician_urgency, 'ยังไม่ประเมิน') }}</span></td>
+          <td><span class="status-text status-{{ case.status }}">{{ status_labels.get(case.status, case.status) }}</span></td>
           <td><a class="open-case" href="{{ url_for('main.staff_case', case_id=case.id) }}">เปิดเคส →</a></td>
         </tr>
-        {% else %}<tr><td colspan="7" class="empty-state"><strong>ยังไม่มีเคส</strong><span>สร้างเคสทดสอบจากหน้าแบบซักประวัติ</span></td></tr>{% endfor %}
+        {% else %}<tr><td colspan="8" class="empty-state"><strong>ยังไม่มีเคส</strong><span>สร้างเคสทดสอบจากหน้าแบบซักประวัติ</span></td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

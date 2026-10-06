@@ -3,8 +3,8 @@
 {% block content %}
 <a class="back-link" href="{{ url_for('main.staff_dashboard') }}">← กลับแดชบอร์ด</a>
 <section class="case-title-row">
-  <div><span class="eyebrow">CASE REVIEW</span><h1>{{ case.reference }}</h1><p>{{ case.created_at | bangkok_time }} · ช่วงอายุ {{ case.age_group }} · {{ case.sex_at_birth }}</p></div>
-  <div class="risk-stack"><span class="badge badge-{{ case.rule_urgency }}">RULE · {{ case.rule_urgency }}</span><span class="badge badge-neutral">AI · {{ case.ai_urgency_suggestion }}</span><span class="badge badge-neutral">CLINICIAN · {{ case.clinician_urgency or 'pending' }}</span></div>
+  <div><span class="eyebrow">CASE REVIEW</span><h1>{{ case.reference }}</h1><p>{{ case.created_at | bangkok_time }} · ช่วงอายุ {{ case.age_group }} · {{ {'female':'หญิง', 'male':'ชาย', 'intersex':'อินเตอร์เซ็กซ์', 'prefer_not_to_say':'ไม่ประสงค์ระบุ'}.get(case.sex_at_birth, case.sex_at_birth) }} · การตั้งครรภ์: {{ {'pregnant':'ตั้งครรภ์', 'possibly_pregnant':'อาจตั้งครรภ์', 'not_pregnant':'ไม่ได้ตั้งครรภ์', 'not_applicable':'ไม่เกี่ยวข้อง', 'unknown':'ไม่ทราบ'}.get(case.pregnancy_status, case.pregnancy_status) }}</p></div>
+  <div class="risk-stack"><span class="badge badge-{{ case.rule_urgency }}">RULE · {{ urgency_labels.get(case.rule_urgency, case.rule_urgency) }}</span><span class="badge badge-neutral">AI · {{ urgency_labels.get(case.ai_urgency_suggestion, case.ai_urgency_suggestion) }}</span><span class="badge badge-neutral">CLINICIAN · {{ urgency_labels.get(case.clinician_urgency, 'ยังไม่ประเมิน') }}</span></div>
 </section>
 
 {% if case.rule_urgency == 'emergency' %}<div class="emergency-strip large"><strong>กฎความปลอดภัยพบสัญญาณฉุกเฉิน</strong><span>ตรวจบทสนทนาทันทีและทำตาม protocol ของสถานพยาบาล</span></div>{% endif %}
@@ -39,9 +39,15 @@
     <section class="review-card decision-card"><span class="eyebrow">CLINICAL DECISION</span><h2>ยืนยันโดยบุคลากร</h2>
       <form method="post" action="{{ url_for('main.staff_review_case', case_id=case.id) }}" class="form-stack">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>ระดับความเร่งด่วน<select name="urgency" required>{% for value in ['routine', 'soon', 'urgent', 'emergency'] %}<option value="{{ value }}" {% if case.clinician_urgency == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
-        <label>สถานะ<select name="status" required>{% for value in ['collecting', 'ready', 'escalated', 'closed'] %}<option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
-        <button class="button button-primary button-wide" type="submit">บันทึกการตรวจ</button>
+        <label>ระดับความเร่งด่วน<select name="urgency" required><option value="">เลือกระดับหลังประเมิน</option>{% for value in ['routine', 'soon', 'urgent', 'emergency'] %}<option value="{{ value }}" {% if case.clinician_urgency == value %}selected{% endif %}>{{ urgency_labels[value] }}</option>{% endfor %}</select></label>
+        <p>สถานะปัจจุบัน: {{ status_labels.get(case.status, case.status) }} · สถานะใหม่จะเปลี่ยนตามขั้นตอนที่เลือกด้านล่าง</p>
+        <label>ขั้นตอนให้ผู้รับบริการ<select name="disposition" required>
+          <option value="continue" {% if review and review.disposition == 'continue' %}selected{% endif %}>ขอข้อมูลซักประวัติเพิ่ม</option><option value="closed" {% if review and review.disposition == 'closed' %}selected{% endif %}>ปิดเคส</option><option value="wait" {% if not review or review.disposition in ['wait', 'review_only'] %}selected{% endif %}>รอดำเนินการโดยเจ้าหน้าที่</option><option value="appointment" {% if review and review.disposition == 'appointment' %}selected{% endif %}>อนุมัตินัดในแผนกที่ระบุ</option><option value="care" {% if review and review.disposition == 'care' %}selected{% endif %}>เข้ารับการดูแลตามคำแนะนำ · ไม่เปิดคิวนัดปกติ</option>
+        </select></label>
+        <label>แผนกสำหรับการนัด<select name="department"><option value="">เลือกแผนกเมื่ออนุมัตินัด</option>{% for key, label in departments.items() %}<option value="{{ key }}" {% if review and review.department == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>คำแนะนำที่ส่งกลับให้ผู้รับบริการ<textarea name="guidance" minlength="3" maxlength="1000" required>{{ review.guidance if review else '' }}</textarea></label>
+        <p class="ai-note">การอนุมัตินัดต้องเลือกระดับทั่วไปหรือควรตรวจเร็วและระบุแผนก เคสที่กฎพบสัญญาณฉุกเฉินไม่สามารถเปิดคิวนัดปกติได้ ผลนี้จะแสดงบนหน้าผู้ใช้เมื่ออัปเดตข้อมูล</p>
+        <button class="button button-primary button-wide" type="submit">บันทึกผลและส่งขั้นตอนต่อ</button>
       </form>
     </section>
     {% if case.matched_red_flags %}<section class="review-card flag-card"><h3>สัญญาณที่กฎตรวจพบ</h3><ul>{% for flag in case.matched_red_flags %}<li><strong>{{ flag.label }}</strong><small>{{ flag.code }}</small></li>{% endfor %}</ul></section>{% endif %}

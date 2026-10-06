@@ -180,7 +180,7 @@ def book():
         return redirect(url_for("appointments.booking", doctor=slot.doctor_id), code=303)
     appointment = Appointment(reference="APT-" + secrets.token_hex(4).upper(), owner_hash=_owner(),
         slot_id=slot.id, doctor_id=slot.doctor_id, starts_at=slot.starts_at)
-    appointment.referral = AppointmentReferral(case_id=case.id, department=referral['department'], reason=referral['reason'])
+    appointment.referral = AppointmentReferral(case_id=case.id, department=referral['department'], reason=referral['reason'][:260])
     db.session.add(appointment)
     try:
         db.session.commit()

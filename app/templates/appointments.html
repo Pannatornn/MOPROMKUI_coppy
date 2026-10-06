@@ -8,7 +8,7 @@
   <section class="appointment-panel referral-panel">
     <span class="eyebrow">1. แผนกจากข้อมูลซักประวัติ</span><h2>{{ referral.label }}</h2><p>{{ referral.reason }}</p>
     {% if case %}<p class="appointment-muted">อ้างอิงเคส {{ case.reference }}</p>{% endif %}
-    {% if referral.state == 'ready' %}<p class="appointment-muted">แนะนำเบื้องต้นตามกติกาเดโม ไม่ใช่การวินิจฉัย แสดงเฉพาะหมอในแผนกนี้ หากข้อมูลอาการเปลี่ยนให้ซักประวัติใหม่หรือให้เจ้าหน้าที่ตรวจ</p>{% endif %}
+    {% if referral.state == 'ready' %}<p class="appointment-muted">{{ 'เจ้าหน้าที่ระบุแผนกและอนุมัติให้นัดแล้ว' if referral.source == 'staff' else 'แนะนำเบื้องต้นตามกติกาเดโม ไม่ใช่การวินิจฉัย' }} แสดงเฉพาะหมอในแผนกนี้ หากข้อมูลอาการเปลี่ยนให้ซักประวัติใหม่หรือให้เจ้าหน้าที่ตรวจ</p>{% endif %}
     {% if referral.state in ['missing', 'collecting'] %}<a class="button button-primary" href="{{ url_for('main.intake') }}">{{ 'ซักประวัติต่อ' if case else 'เริ่มซักประวัติ' }}</a>{% elif referral.state == 'emergency' %}<a class="button button-primary" href="tel:1669">โทร 1669</a>{% endif %}
   </section>
   {% if not doctors %}{% if referral.state == 'ready' %}<p>แผนกนี้ยังไม่มีตารางแพทย์ กรุณาติดต่อเจ้าหน้าที่ จะไม่เปลี่ยนแผนกเพื่อหาคิวแทน</p>{% endif %}{% else %}
