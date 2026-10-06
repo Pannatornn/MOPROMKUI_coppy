@@ -37,6 +37,7 @@ class AIResult:
     provider: str
     request_id: str | None = None
     error_code: str | None = None
+    model: str | None = None
 
 
 def _fallback(case: Case, error_code: str | None = None) -> AIResult:
@@ -170,11 +171,15 @@ def _gemini_turn(case: Case) -> AIResult:
             if response.status_code >= 500 and attempt == 0 and deadline - time.monotonic() > 1.0:
                 # If schema-constrained generation fails, use JSON mode for
                 # the retry. The same local schema still validates the output.
-                schema = payload["generationConfig"].pop("responseJsonSchema")
-                payload["systemInstruction"]["parts"].append({"text":
-                    "Return only a JSON object matching this schema. "
-                    "Do not include markdown or extra text: " + json.dumps(schema, ensure_ascii=False)
-                })
+                if response.status_code == 503:
+                    model = current_app.config.get("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite").removeprefix("models/") or model
+                    logger.warning("Gemini unavailable: trying fallback model %s", model)
+                else:
+                    schema = payload["generationConfig"].pop("responseJsonSchema")
+                    payload["systemInstruction"]["parts"].append({"text":
+                        "Return only a JSON object matching this schema. "
+                        "Do not include markdown or extra text: " + json.dumps(schema, ensure_ascii=False)
+                    })
                 time.sleep(1.0)
                 continue
             return _fallback(case, code)
@@ -194,6 +199,7 @@ def _gemini_turn(case: Case) -> AIResult:
         turn=parsed,
         provider="gemini",
         request_id=data.get("responseId"),
+        model=model,
     )
 
 
