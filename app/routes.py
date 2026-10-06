@@ -419,23 +419,32 @@ def staff_review_case(case_id: str):
     staff_user = _staff_required()
     _require_csrf()
     case = db.get_or_404(Case, case_id)
+    from .referrals import DEPARTMENTS
+
+    def invalid_review(message):
+        return render_template("staff_case.html", case=case, departments=DEPARTMENTS,
+                               review=current_review(case), review_form=request.form,
+                               review_error=message), 400
+
     urgency = request.form.get("urgency", "")
     status = request.form.get("status", case.status)
     if urgency not in URGENCY_OPTIONS or status not in STATUS_OPTIONS:
-        abort(400)
-    from .referrals import DEPARTMENTS
+        return invalid_review("กรุณาเลือกระดับความเร่งด่วนและสถานะที่ระบบรองรับ")
     disposition = request.form.get("disposition", "review_only")
     department = request.form.get("department", "")
     guidance = request.form.get("guidance", "").strip()
     if disposition not in {"review_only", "appointment", "care", "wait", "continue", "closed"} or len(guidance) > 1000:
-        abort(400)
+        return invalid_review("ขั้นตอนต่อไม่ถูกต้อง หรือคำแนะนำยาวเกิน 1,000 ตัวอักษร")
     if disposition != "review_only" and not 3 <= len(guidance) <= 1000:
-        abort(400, "Patient guidance is required")
+        return invalid_review("กรุณาระบุคำแนะนำให้ผู้รับบริการ 3–1,000 ตัวอักษร")
     if disposition == "appointment":
         texts = [case.chief_complaint] + [m.content for m in case.messages if m.role == "patient"]
-        if (department not in DEPARTMENTS or urgency not in {"routine", "soon"}
-                or case.rule_urgency == "emergency" or any(find_red_flags(t) for t in texts)):
-            abort(400, "Emergency screening cannot be approved for routine appointments")
+        if case.rule_urgency == "emergency" or any(find_red_flags(t) for t in texts):
+            return invalid_review("กฎคัดกรองพบสัญญาณที่อาจฉุกเฉิน จึงไม่เปิดคิวนัดปกติ กรุณาเลือกเข้ารับการดูแลตามคำแนะนำ หรือรอดำเนินการโดยเจ้าหน้าที่")
+        if urgency not in {"routine", "soon"}:
+            return invalid_review("ระดับเร่งด่วนหรือฉุกเฉินไม่ตรงกับการอนุมัติคิวนัดปกติ กรุณาเลือกขั้นตอนเข้ารับการดูแลตามคำแนะนำ หากประเมินว่าเหมาะกับการนัดปกติ ให้เลือกระดับทั่วไปหรือควรตรวจเร็วตามผลประเมินจริง")
+        if department not in DEPARTMENTS:
+            return invalid_review("กรุณาเลือกแผนกสำหรับการนัดก่อนอนุมัตินัด")
         status = "ready"
     elif disposition == "care":
         status = "escalated"
@@ -457,6 +466,7 @@ def staff_review_case(case_id: str):
          "patient_message_ids": [m.id for m in case.messages if m.role == "patient"]},
     )
     db.session.commit()
+    flash("บันทึกผลประเมินและขั้นตอนต่อแล้ว ผู้รับบริการจะเห็นผลเมื่อหน้าอัปเดตข้อมูล", "success")
     return redirect(url_for("main.staff_case", case_id=case.id))
 
 
