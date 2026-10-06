@@ -264,3 +264,38 @@ def test_gemini_invalid_or_blocked_output_uses_fallback(app, monkeypatch, respon
         result = generate_interview_turn(case)
         assert result.provider == "safe_fallback"
         assert result.error_code in {"empty_or_refused", "invalid_response"}
+
+
+def test_gemini_timeout_tries_fallback_with_remaining_budget(app, monkeypatch):
+    native_client = httpx.Client
+    calls = []
+    parsed = InterviewTurn(
+        assistant_message="คำถามทดสอบ", status="collecting", urgency_suggestion="routine",
+        summary=ClinicalSummary(chief_complaint="ทดสอบ", onset_and_course="วันนี้", severity_and_impact="เล็กน้อย"),
+        red_flags_reported=[], remaining_questions=[],
+    )
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("synthetic timeout", request=request)
+        return httpx.Response(200, json={"candidates": [{"finishReason": "STOP",
+            "content": {"parts": [{"text": parsed.model_dump_json()}]}}]})
+
+    times = iter([0, 0, 45, 45, 46, 46])
+    monkeypatch.setattr(ai_module, "time", SimpleNamespace(monotonic=lambda: next(times)))
+    monkeypatch.setattr(ai_module.httpx, "Client", lambda: native_client(transport=httpx.MockTransport(handler)))
+    app.config.update(AI_PROVIDER="gemini", GEMINI_API_KEY="synthetic-key")
+    with app.app_context():
+        case = Case(reference="MPK-TIMEOUT", chief_complaint="ทดสอบ", pregnancy_status="not_applicable")
+        case.messages = [Message(role="patient", content="ข้อมูลสมมติ")]
+        result = generate_interview_turn(case)
+        assert result.provider == "gemini"
+        assert result.model == "gemini-3.1-flash-lite"
+        assert len(calls) == 2
+        assert [request.extensions["timeout"]["read"] for request in calls] == [45.0, 45.0]
+        next_result = generate_interview_turn(case)
+        assert next_result.provider == "gemini"
+        assert next_result.model == "gemini-3.1-flash-lite"
+        assert len(calls) == 3
+        assert "/gemini-3.1-flash-lite:generateContent" in str(calls[2].url)
