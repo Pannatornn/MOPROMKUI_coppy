@@ -4,6 +4,15 @@
 <section class="appointment-page">
   <span class="eyebrow">DOCTOR CALENDARS</span><h1>จัดการนัดหมาย</h1>
   <div class="appointment-demo">ตารางหมอสมมติสำหรับทดลอง เจ้าหน้าที่เพิ่มคิว ปิดรับคิว และยกเลิกนัดได้แยกตามแพทย์</div>
+  <section class="appointment-panel"><h2>คำขอให้จัดนัด · เรียงเคสฉุกเฉินและเร่งด่วนก่อน</h2>
+    {% for ticket in pending_requests %}<article class="appointment-panel"><strong>{{ ticket.reference }} · {{ urgency_labels.get(ticket.urgency, ticket.urgency) }}</strong><p><a href="{{ url_for('main.staff_case', case_id=ticket.case_id) }}">ตรวจเคส {{ ticket.case.reference }} →</a> · {{ ticket.created_at|bangkok_time }}</p>
+      <p>จัดให้ {{ selected.name }} · {{ day|appointment_date }} · เปลี่ยนแพทย์และวันในตัวเลือกตารางด้านล่าง</p>
+      <form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="case_id" value="{{ ticket.case_id }}"><input type="hidden" name="action" value="assign_request">
+      <label>เวลาว่าง<select name="slot_id" required><option value="">เลือกเวลา</option>{% for slot in slots if slot.state == 'free' and slot.starts_at|appointment_future %}<option value="{{ slot.id }}">{{ slot.starts_at|bangkok_time('%H:%M') }}</option>{% endfor %}</select></label>
+      <label class="consent-row"><input type="checkbox" name="followup" value="yes" {% if ticket.urgency in ['urgent', 'emergency'] %}required{% endif %}><span>นัดนี้เป็นนัดติดตามภายหลัง ไม่แทนการดูแลฉุกเฉิน/เร่งด่วน ต้องตรวจเคสและจัดการดูแลเร่งด่วนก่อน</span></label>
+      <button class="button button-primary" type="submit">ยืนยันแพทย์และเวลานัดให้ผู้รับบริการ</button></form>
+    </article>{% else %}<p>ยังไม่มีคำขอที่รอจัดนัด</p>{% endfor %}
+  </section>
   <section class="appointment-panel">
     <form method="get" class="appointment-filters">
       <label>แพทย์<select name="doctor">{% for doctor in doctors %}<option value="{{ doctor.id }}" {% if doctor.id == selected.id %}selected{% endif %}>{{ doctor.name }} · {{ doctor.specialty }}</option>{% endfor %}</select></label>
