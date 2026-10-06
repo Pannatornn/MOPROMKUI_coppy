@@ -179,7 +179,7 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
         "interview_turn",
         {
             "provider": result.provider,
-            "model": (
+            "model": result.model or (
                 current_app.config["OPENAI_MODEL"]
                 if result.provider == "openai"
                 else current_app.config["GEMINI_MODEL"]
