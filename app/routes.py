@@ -93,6 +93,7 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
         ai_mode = "pending"
     from .appointments import request_json
     data = {
+        "chat": _chat_state(case),
         "appointment_request": request_json(case),
         "id": case.id,
         "reference": case.reference,
@@ -111,6 +112,18 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
             for message in case.messages
         ]
     return data
+
+
+def _chat_state(case: Case) -> dict:
+    if case.rule_urgency == "emergency" or case.clinician_urgency == "emergency":
+        return {"can_send": False, "reason": "กรุณาเข้ารับการดูแลฉุกเฉินตามคำแนะนำด้านบน ไม่ต้องรอแชท"}
+    if case.status == "closed":
+        return {"can_send": False, "reason": "เคสนี้ปิดแล้ว หากมีเรื่องใหม่ให้เริ่มเคสใหม่"}
+    if case.status == "escalated":
+        return {"can_send": False, "reason": "พักการซักประวัติเพื่อให้เจ้าหน้าที่ประเมิน ดูคำแนะนำและสถานะนัดด้านบน"}
+    if case.status == "ready" and current_review(case):
+        return {"can_send": False, "reason": "เจ้าหน้าที่ประเมินแล้ว กรุณาดำเนินการตามคำแนะนำด้านบน"}
+    return {"can_send": True, "reason": "", "supplementary": case.status == "ready"}
 
 
 def _audit(case: Case, actor: str, action: str, detail: dict | None = None) -> None:
@@ -169,7 +182,11 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
         )
     elif turn.status == "ready" and patient_turns >= MIN_PATIENT_TURNS:
         case.status = "ready"
-        output = turn.assistant_message
+        output = (
+            "ข้อมูลเบื้องต้นพร้อมให้บุคลากรตรวจแล้วครับ "
+            "หากมีข้อมูลเพิ่มเติมหรือยังตอบไม่ครบ สามารถพิมพ์เพิ่มในช่องด้านล่างได้ "
+            "หรือไปต่อที่นัดหมายแพทย์ได้ครับ"
+        )
     else:
         case.status = "collecting"
         if turn.status == "ready":
@@ -333,12 +350,9 @@ def get_case(case_id: str):
 @limiter.limit("15 per minute")
 def add_message(case_id: str):
     case = _case_for_patient(case_id)
-    if case.status in {"ready", "escalated"}:
-        return jsonify(_case_json(case)), 409
-    if case.status == "closed":
-        return _json_error("เคสนี้ปิดแล้ว", 409)
-    if case.rule_urgency == "emergency":
-        return jsonify(_case_json(case)), 409
+    chat = _chat_state(case)
+    if not chat["can_send"]:
+        return jsonify({**_case_json(case), "error": chat["reason"]}), 409
 
     data = request.get_json(silent=True) or {}
     content = str(data.get("content", "")).strip()

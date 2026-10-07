@@ -69,6 +69,7 @@
     <section id="appointment-request-result" class="appointment-panel" hidden aria-live="polite"><h2>สถานะคำขอนัด</h2><p id="appointment-request-text"></p><a class="button button-primary" href="{{ url_for('appointments.booking') }}">ดูรายละเอียดนัด →</a></section>
     <div id="messages" class="messages" aria-live="polite"></div>
     <div id="typing-indicator" class="typing-indicator" hidden><i></i><i></i><i></i><span>กำลังจัดคำถามถัดไป</span></div>
+    <p id="chat-notice" class="appointment-muted" role="status" hidden></p>
     <form id="message-form" class="message-form">
       <label class="sr-only" for="message-input">ตอบคำถาม</label>
       <div class="message-compose"><textarea id="message-input" rows="2" maxlength="2000" placeholder="พิมพ์คำตอบของคุณ..." required></textarea><small>Enter เพื่อส่ง · Shift + Enter เพื่อขึ้นบรรทัดใหม่</small></div>
@@ -84,4 +85,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='11') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='12') }}" defer></script>{% endblock %}
