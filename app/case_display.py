@@ -9,6 +9,12 @@ URGENCY_LABELS = {'pending': 'ยังไม่ระบุ', 'routine': 'ท�
                   'urgent': 'เร่งด่วน', 'emergency': 'ฉุกเฉิน'}
 
 
+def summary_is_current(case):
+    event = next((e for e in reversed(case.audit_events) if e.action == 'interview_turn'), None)
+    latest = max((m.id for m in case.messages if m.role == 'patient'), default=0)
+    return bool(event and event.detail.get('patient_message_id') == latest)
+
+
 def current_review(case):
     event = next((e for e in reversed(getattr(case, 'audit_events', []))
                   if e.action == 'clinical_review_updated'), None)
