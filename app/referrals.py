@@ -18,13 +18,13 @@ PATTERNS = {
 
 
 def recommend_department(case):
+    if case.status == 'closed':
+        return {'state': 'closed', 'department': None, 'label': 'ปิดเคสแล้ว',
+                'reason': 'เคสนี้ปิดแล้ว หากต้องการนัดใหม่ให้เริ่มซักประวัติใหม่'}
     texts = [case.chief_complaint] + [m.content for m in case.messages if m.role == 'patient']
     if case.rule_urgency == 'emergency' or case.clinician_urgency == 'emergency' or any(find_red_flags(t) for t in texts):
         return {'state': 'emergency', 'department': None, 'label': 'ห้องฉุกเฉิน',
                 'reason': 'พบสัญญาณที่อาจฉุกเฉิน ไม่ควรรอคิวนัดปกติ ให้โทร 1669 หรือไปห้องฉุกเฉินทันที'}
-    if case.status == 'closed':
-        return {'state': 'closed', 'department': None, 'label': 'ปิดเคสแล้ว',
-                'reason': 'เคสนี้ปิดแล้ว หากต้องการนัดใหม่ให้เริ่มซักประวัติใหม่'}
     review = current_review(case)
     if review and review.get('disposition') == 'appointment' and review.get('department') in DEPARTMENTS and case.clinician_urgency in {'routine', 'soon'}:
         department = review['department']
