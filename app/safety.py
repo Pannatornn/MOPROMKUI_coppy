@@ -182,9 +182,21 @@ URGENT_SIGNALS = (
     ),
 )
 
+ENGLISH_RED_FLAGS = (
+    RedFlag('severe_breathing', 'หายใจลำบากรุนแรง', re.compile(
+        r"\b(?:cannot|can't|can’t|unable to) breathe\b|\bsevere (?:difficulty breathing|breathlessness)\b|\bgasping for (?:air|breath)\b")),
+    RedFlag('chest_pain', 'เจ็บหรือแน่นหน้าอกรุนแรง', re.compile(
+        r'\b(?:severe|crushing|sudden) chest (?:pain|pressure|tightness)\b')),
+    RedFlag('unconscious', 'หมดสติ ไม่ตอบสนอง หรือไม่หายใจ', re.compile(
+        r"\b(?:unconscious|unresponsive|not breathing|stopped breathing|cannot wake (?:him|her|them)|can't wake (?:him|her|them))\b")),
+    RedFlag('major_bleeding', 'เลือดออกมากหรือไม่หยุด', re.compile(
+        r"\b(?:heavy bleeding|severe bleeding|vomiting blood|bleeding (?:that )?(?:won't|will not|does not|doesn't) stop)\b")),
+)
+
 _NEGATION = re.compile(
     r"(?:ไม่|ไม่มี|ไม่ได้|ยังไม่|ไม่เคย|ปฏิเสธ|ไม่ค่อย|ไม่ถึง|ต่ำกว่า)"
-    r"(?:มี|พบ|เป็น)?(?:อาการ)?\s*$"
+    r"(?:มี|พบ|เป็น)?(?:อาการ)?\s*$|"
+    r"\b(?:no|denies|without|not|do not have|don't have|does not have|doesn't have)\s*$"
 )
 _UNSAFE_AI = re.compile(
     r"(?:วินิจฉัยว่า|คุณเป็นโรค|น่าจะเป็นโรค|รับประทานยา|กินยา\s*\d|หยุดยา|ไม่ต้องไปโรงพยาบาล|ปลอดภัยแน่นอน)"
@@ -214,7 +226,7 @@ def _first_non_negated_match(flag: RedFlag, text: str) -> re.Match[str] | None:
 def find_red_flags(text: str) -> list[dict[str, str]]:
     normalized = normalize(text)
     matches: list[dict[str, str]] = []
-    for flag in RED_FLAGS:
+    for flag in RED_FLAGS + ENGLISH_RED_FLAGS:
         match = _first_non_negated_match(flag, normalized)
         if match:
             matches.append({"code": flag.code, "label": flag.label})
