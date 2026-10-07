@@ -5,7 +5,8 @@ import secrets
 import hmac
 
 import click
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for, current_app
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 from sqlalchemy import ForeignKey, UniqueConstraint, update, case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -154,11 +155,43 @@ def _parse_day(value):
 
 
 def _referral_context():
+    context = request.form.get('context') if request.method == 'POST' else request.args.get('context')
+    if context:
+        try:
+            payload = _context_signer().loads(context, max_age=30 * 86400)
+            case = db.session.get(Case, payload['id'])
+            if not case or not hmac.compare_digest(case.token_hash, payload['hash']):
+                abort(404)
+        except (BadSignature, KeyError, TypeError):
+            abort(404)
+        return case, recommend_department(case)
     case = db.session.get(Case, session.get('appointment_case_id')) if session.get('appointment_case_id') else None
     if not case or not hmac.compare_digest(case.token_hash, session.get('appointment_case_hash', '')):
         return None, {'state': 'missing', 'department': None, 'label': 'เริ่มซักประวัติก่อนนัด',
                       'reason': 'ระบบต้องมีข้อมูลอาการเพื่อแนะนำแผนก คุณไม่ต้องเลือกแผนกเอง'}
     return case, recommend_department(case)
+
+
+def _context_signer():
+    return URLSafeTimedSerializer(current_app.secret_key, salt='patient-booking-context-v1')
+
+
+def booking_context(case):
+    return _context_signer().dumps({'id': case.id, 'hash': case.token_hash}) if case else ''
+
+
+def case_booking_url(case, **values):
+    return url_for('appointments.booking', context=booking_context(case), **values)
+
+
+def _booking_url(**values):
+    case, _ = _referral_context()
+    return case_booking_url(case, **values) if case else url_for('appointments.booking', **values)
+
+
+@bp.app_context_processor
+def appointment_links():
+    return {'booking_context': booking_context, 'case_booking_url': case_booking_url}
 
 
 @bp.get("/appointments")
@@ -168,6 +201,12 @@ def booking():
         Appointment.owner_hash == owner,
     ).order_by(Appointment.starts_at.desc()).limit(30)).all()
     case, referral = _referral_context()
+    # Remember the last explicit visit for the navigation menu only. Every
+    # scheduling link/form carries its own signed case and cannot be switched
+    # by polling or by another tab visiting a different case.
+    if case:
+        session['appointment_case_id'] = case.id
+        session['appointment_case_hash'] = case.token_hash
     ticket = request_json(case) if case else None
     doctors = db.session.scalars(db.select(Doctor).where(Doctor.specialty == referral['label']).order_by(Doctor.id)).all() if referral['state'] == 'ready' and (not ticket or ticket.get('appointment_status') == 'cancelled') else []
     if not doctors:
@@ -177,7 +216,7 @@ def booking():
         abort(404)
     if selected.specialty != referral['label']:
         flash('ระบบแสดงเฉพาะแพทย์ในแผนกที่แนะนำสำหรับเคสนี้', 'error')
-        return redirect(url_for('appointments.booking'), code=303)
+        return redirect(_booking_url(), code=303)
     future = db.session.scalars(db.select(AppointmentSlot).where(
         AppointmentSlot.starts_at > _now(), AppointmentSlot.state == "free",
         AppointmentSlot.starts_at < _day_range(_today() + timedelta(days=29))[0],
@@ -205,9 +244,11 @@ def request_appointment():
     case, referral = _referral_context()
     if not case or request.form.get('case_id') != case.id:
         abort(409, 'Intake case changed; refresh the page')
+    if referral['state'] not in {'ready', 'review', 'emergency', 'collecting'}:
+        abort(409, 'This case is not accepting appointment requests')
     receipt = request_json(case)
     if receipt and receipt.get('appointment_status') == 'booked':
-        return redirect(url_for('appointments.booking'), code=303)
+        return redirect(_booking_url(), code=303)
     existing = db.session.get(AppointmentRequest, case.id)
     if existing and existing.appointment and existing.appointment.status == 'cancelled':
         changed = db.session.execute(update(AppointmentRequest).execution_options(synchronize_session=False).where(
@@ -229,7 +270,7 @@ def request_appointment():
             if not db.session.get(AppointmentRequest, case.id):
                 raise
     flash('ส่งคำขอนัดแล้ว ดูสถานะและเวลาที่เจ้าหน้าที่ยืนยันได้ในหน้านี้', 'success')
-    return redirect(url_for('appointments.booking'), code=303)
+    return redirect(_booking_url(), code=303)
 
 
 @bp.post("/appointments/book")
@@ -244,11 +285,11 @@ def book():
     ticket = db.session.get(AppointmentRequest, case.id)
     if ticket and ticket.status == 'pending':
         flash('ส่งคำขอให้เจ้าหน้าที่จัดนัดแล้ว ดูผลในหน้ารายละเอียดนัด', 'success')
-        return redirect(url_for('appointments.booking'), code=303)
+        return redirect(_booking_url(), code=303)
     receipt = request_json(case)
     if receipt and receipt.get('appointment_status') == 'booked':
         flash('เคสนี้มีนัดยืนยันแล้ว ดูเลขนัดและวันเวลาด้านล่าง หากต้องเปลี่ยนเวลาให้ยกเลิกนัดเดิมก่อน', 'success')
-        return redirect(url_for('appointments.booking'), code=303)
+        return redirect(_booking_url(), code=303)
     slot = db.get_or_404(AppointmentSlot, request.form.get("slot_id", type=int))
     if slot.doctor.specialty != referral['label']:
         abort(409, 'Doctor is outside the recommended department')
@@ -262,7 +303,7 @@ def book():
         if claimed_case != 1:
             db.session.rollback()
             flash('สถานะนัดเปลี่ยนแล้ว กรุณาดูรายการนัดล่าสุด', 'error')
-            return redirect(url_for('appointments.booking'), code=303)
+            return redirect(_booking_url(), code=303)
     else:
         ticket = AppointmentRequest(case_id=case.id, reference='REQ-' + secrets.token_hex(4).upper(),
             owner_hash=_owner(), urgency=_request_urgency(case), status='confirmed')
@@ -272,7 +313,7 @@ def book():
         except IntegrityError:
             db.session.rollback()
             flash('เคสนี้กำลังจองหรือมีนัดแล้ว กรุณาดูรายการล่าสุด', 'error')
-            return redirect(url_for('appointments.booking'), code=303)
+            return redirect(_booking_url(), code=303)
     # Claim the slot in the database, so simultaneous bookings cannot both win.
     claimed = db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(
         AppointmentSlot.id == slot.id, AppointmentSlot.state == "free",
@@ -282,7 +323,7 @@ def book():
     if claimed != 1:
         db.session.rollback()
         flash("คิวนี้ถูกจอง ปิดรับ หรือผ่านเวลาแล้ว กรุณาเลือกคิวใหม่", "error")
-        return redirect(url_for("appointments.booking", doctor=slot.doctor_id), code=303)
+        return redirect(_booking_url(doctor=slot.doctor_id), code=303)
     appointment = Appointment(reference="APT-" + secrets.token_hex(4).upper(), owner_hash=_owner(),
         slot_id=slot.id, doctor_id=slot.doctor_id, starts_at=slot.starts_at)
     appointment.referral = AppointmentReferral(case_id=case.id, department=referral['department'], reason=referral['reason'][:260])
@@ -299,7 +340,7 @@ def book():
         flash("จองคิวนี้ไม่สำเร็จ กรุณาเลือกคิวใหม่", "error")
     else:
         flash("จองนัดทดลองสำเร็จ รหัสนัด " + appointment.reference, "success")
-    return redirect(url_for("appointments.booking", doctor=slot.doctor_id), code=303)
+    return redirect(_booking_url(doctor=slot.doctor_id), code=303)
 
 
 def _cancel(appointment, owner=None):
@@ -328,7 +369,7 @@ def cancel(appointment_id):
         _cancel(appointment)
     else:
         _cancel(appointment, owner)
-    return redirect(url_for("appointments.booking"), code=303)
+    return redirect(_booking_url(), code=303)
 
 
 @bp.route("/staff/appointments", methods=["GET", "POST"])
@@ -373,9 +414,14 @@ def staff_calendar():
             _cancel(appointment)
         elif action == 'assign_request':
             ticket = db.get_or_404(AppointmentRequest, request.form.get('case_id', ''))
+            referral = recommend_department(ticket.case)
+            if referral['state'] in {'closed', 'collecting'}:
+                abort(409, 'Review this case before assigning an appointment')
             slot = db.get_or_404(AppointmentSlot, request.form.get('slot_id', type=int))
             if slot.doctor_id != doctor.id or _local(slot.starts_at).date() != day:
                 abort(400)
+            if referral['state'] == 'ready' and doctor.specialty != referral['label']:
+                abort(409, 'Doctor is outside the reviewed department')
             if _request_urgency(ticket.case) in {'urgent', 'emergency'} and request.form.get('followup') != 'yes':
                 flash('กรุณายืนยันว่าเป็นนัดติดตาม ไม่แทนการดูแลเร่งด่วน', 'error')
                 return redirect(url_for('appointments.staff_calendar', doctor=doctor.id, day=day.isoformat()), code=303)
