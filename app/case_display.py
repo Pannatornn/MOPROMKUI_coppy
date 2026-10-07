@@ -35,7 +35,7 @@ def dashboard_counts():
                                          .group_by(Case.status)).all()))
     counts['total'] = sum(counts.values())
     counts['urgent'] = db.session.scalar(db.select(func.count()).select_from(Case).where(
-        Case.status != 'closed', or_(Case.status == 'escalated',
+        Case.status != 'closed', or_(
             Case.rule_urgency.in_(['urgent', 'emergency']),
             Case.ai_urgency_suggestion.in_(['urgent', 'emergency']),
             Case.clinician_urgency.in_(['urgent', 'emergency'])))) or 0
