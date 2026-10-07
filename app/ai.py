@@ -22,7 +22,7 @@ FALLBACK_NOTICES = {
     "AuthenticationError": "API key ไม่ถูกต้องหรือถูกยกเลิก ผู้ดูแลควรเปลี่ยน key ใหม่",
     "PermissionDeniedError": "บัญชี API นี้ไม่มีสิทธิ์ใช้ model ที่ตั้งไว้ ผู้ดูแลควรตรวจสิทธิ์บัญชีหรือเปลี่ยน model",
     "NotFoundError": "ไม่พบ model ที่ตั้งไว้ ผู้ดูแลควรตรวจค่า OPENAI_MODEL ใน Render",
-    "RateLimitError": "API key นี้ถึงขีดจำกัดการใช้งาน ผู้ดูแลสามารถเปลี่ยน key ใหม่ในหน้า ตั้งค่า AI",
+    "RateLimitError": "บริการ AI ถึงขีดจำกัดการรับคำขอในขณะนี้ ระบบจึงใช้คำถามสำรองชั่วคราว",
     "APITimeoutError": "AI ตอบช้ากว่ากำหนด ระบบจึงใช้คำถามสำรองชั่วคราว",
     "APIConnectionError": "เชื่อมต่อ AI ไม่สำเร็จชั่วคราว ระบบจึงใช้คำถามสำรอง",
     "InternalServerError": "บริการ AI ขัดข้องชั่วคราว ระบบจึงใช้คำถามสำรอง และจะลอง AI อีกครั้งเมื่อคุณตอบข้อความถัดไป",
@@ -38,6 +38,43 @@ class AIResult:
     request_id: str | None = None
     error_code: str | None = None
     model: str | None = None
+
+
+def ground_summary(case: Case, turn: InterviewTurn) -> None:
+    """Require patient-source excerpts before displaying asserted facts.
+
+    Excerpt validation cannot prove entailment; staff still reviews the wording.
+    Missing evidence is represented as unknown, never as a negative finding.
+    """
+    texts = [m.content for m in case.messages if m.role == 'patient']
+    supported = {}
+    for item in turn.summary.evidence:
+        quotes = [q for q in item.quotes if q.strip() and any(q in text for text in texts)]
+        if quotes:
+            supported.setdefault(item.field, []).extend(quotes)
+    factual_fields = {
+        'onset_and_course', 'symptom_location_and_character', 'severity_and_impact',
+        'aggravating_and_relieving_factors', 'associated_symptoms', 'relevant_history',
+        'past_procedures_or_hospitalizations', 'current_medications', 'allergies',
+        'family_history', 'social_and_exposure_history', 'travel_and_sick_contacts',
+        'vital_signs_if_known', 'functional_status', 'patient_concerns',
+        'patient_goal_or_expected_care',
+    }
+    for field in factual_fields:
+        if field not in supported:
+            value = getattr(turn.summary, field)
+            setattr(turn.summary, field, [] if isinstance(value, list) else 'ยังไม่ได้ข้อมูล')
+    # These values come directly from the validated intake form.
+    turn.summary.chief_complaint = case.chief_complaint
+    turn.summary.pregnancy_context = case.pregnancy_status
+    turn.summary.evidence = [item for item in turn.summary.evidence
+                             if item.field in supported and item.field in factual_fields
+                             and all(q.strip() and any(q in text for text in texts) for q in item.quotes)]
+    essential = {'onset_and_course': 'เวลาเริ่มและการดำเนินอาการ',
+                 'severity_and_impact': 'ความรุนแรงและผลต่อกิจวัตร'}
+    for field, label in essential.items():
+        if field not in supported and label not in turn.summary.missing_critical_information:
+            turn.summary.missing_critical_information.append(label)
 
 
 def _fallback(case: Case, error_code: str | None = None) -> AIResult:
@@ -58,8 +95,8 @@ def _fallback(case: Case, error_code: str | None = None) -> AIResult:
     ready = answered >= len(questions)
     if ready:
         assistant_message = (
-            "ขอบคุณครับ ข้อมูลเบื้องต้นพร้อมให้บุคลากรทางการแพทย์ตรวจแล้ว "
-            "โปรดรอการประเมิน และหากอาการรุนแรงขึ้นให้โทร 1669"
+            "จบคำถามสำรองแล้วครับ ระบบยังยืนยันความครบถ้วนของข้อมูลไม่ได้ "
+            "จึงส่งให้เจ้าหน้าที่ตรวจและจัดขั้นตอนต่อก่อนนัด"
         )
     else:
         assistant_message = questions[answered]
@@ -86,12 +123,12 @@ def _fallback(case: Case, error_code: str | None = None) -> AIResult:
         latest_response_analysis="AI ไม่พร้อมใช้งาน จึงยังไม่มีผลวิเคราะห์จากโมเดล",
         care_level_reasoning="ใช้กฎความปลอดภัยและรอให้บุคลากรตรวจ",
         suggested_care_pathway="clinician_review_required",
-        missing_critical_information=[] if ready else questions[answered:],
+        missing_critical_information=(['ต้องให้เจ้าหน้าที่ตรวจคำตอบและข้อมูลสำคัญจากบทสนทนา'] if ready else questions[answered:]),
     )
     return AIResult(
         turn=InterviewTurn(
             assistant_message=assistant_message,
-            status="ready" if ready else "collecting",
+            status="escalate_review" if ready else "collecting",
             urgency_suggestion="routine",
             summary=summary,
             red_flags_reported=[],
