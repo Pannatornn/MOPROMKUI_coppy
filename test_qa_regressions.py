@@ -1,3 +1,4 @@
+import pytest
 from tests.conftest import app, client, create_case
 from app.extensions import db
 from app.models import Case
@@ -84,8 +85,9 @@ def test_booking_context_cannot_be_tampered_with(client):
     assert client.get(case['booking_url']+'tampered').status_code == 404
 
 
-def test_closed_case_cannot_request_appointment(client,app):
-    case = create_case(client).json
+@pytest.mark.parametrize("complaint", ["ผื่นคันเล็กน้อย", "ปวดท้องมากจนทนไม่ไหว 9/10", "severe chest pain and cannot breathe"])
+def test_closed_case_cannot_request_appointment(client,app,complaint):
+    case = create_case(client,complaint).json
     with app.app_context():
         db.session.get(Case,case['id']).status='closed'
         db.session.commit()
