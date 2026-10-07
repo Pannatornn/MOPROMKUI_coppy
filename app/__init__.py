@@ -39,6 +39,16 @@ def _validate_config(app: Flask) -> None:
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
+    # Read-only API traffic must not refresh a stale authentication cookie.
+    # Patient case authorization uses X-Case-Token, never the staff session.
+    from flask.sessions import SecureCookieSessionInterface
+    from flask import request
+    class CaseSessionInterface(SecureCookieSessionInterface):
+        def save_session(self, app, session, response):
+            if request.path.startswith('/api/cases'):
+                return
+            super().save_session(app, session, response)
+    app.session_interface = CaseSessionInterface()
     if test_config:
         app.config.update(test_config)
     _validate_config(app)
@@ -64,12 +74,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         response.headers.setdefault("Cache-Control", "no-store")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
         return response
+
+    from .case_display import summary_is_current
 
     @app.context_processor
     def inject_branding():
         return {
             "clinic_name": app.config["CLINIC_NAME"],
+            "summary_is_current": summary_is_current,
             "privacy_contact": app.config["PRIVACY_CONTACT"],
         }
 
