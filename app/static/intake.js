@@ -73,7 +73,7 @@
       aiMode.textContent = `${data.ai_provider === "gemini" ? "Gemini AI" : "AI"} วิเคราะห์ทุกข้อความ`;
     } else if (data.ai_mode === "safety_rule") {
       aiMode.className = "ai-mode ai-mode-rule";
-      aiMode.textContent = "กฎฉุกเฉินทำงานก่อน AI";
+      aiMode.textContent = "กฎความปลอดภัยทำงานก่อน AI";
     } else if (data.ai_mode === "fallback") {
       aiMode.className = "ai-mode ai-mode-fallback";
       aiMode.textContent = "โหมดคำถามสำรอง · AI ไม่พร้อม";
@@ -87,7 +87,10 @@
     const urgentReview = [data.urgency, data.ai_urgency, data.clinician_urgency].includes("urgent") && !(data.appointment_referral?.source === "staff" && data.appointment_referral.state === "ready");
     setStep(closedForPatient ? 3 : 2);
     status.hidden = false;
-    if (data.urgency === "emergency" || data.clinician_urgency === "emergency") {
+    if (data.status === "closed") {
+      status.className = "case-status status-ready";
+      status.innerHTML = "<strong>ปิดเคสแล้ว</strong><span>การซักประวัติเคสนี้สิ้นสุดแล้ว หากมีอาการใหม่ให้เริ่มเคสใหม่</span>";
+    } else if (data.urgency === "emergency" || data.clinician_urgency === "emergency") {
       status.className = "case-status status-emergency";
       status.innerHTML = "<strong>พบสัญญาณที่อาจฉุกเฉิน</strong><span>หยุดตอบและโทร 1669 ทันที</span>";
     } else if (urgentReview) {
@@ -121,7 +124,11 @@
     messageInput.placeholder = 'พิมพ์คำตอบของคุณ...';
     const referral = data.appointment_referral;
     const referralPanel = document.querySelector('#appointment-referral');
-    referralPanel.hidden = !referral || referral.state === 'collecting';
+    referralPanel.hidden = !referral || ['collecting', 'closed'].includes(referral.state) || data.status === 'closed';
+    for (const link of document.querySelectorAll('a[href^="/appointments"]')) {
+      link.href = data.booking_url || '/appointments';
+    }
+    document.querySelector('#appointment-next-link').href = data.booking_url || '/appointments';
     if (!referralPanel.hidden) {
       document.querySelector('#emergency-next-link').hidden = referral.state !== 'emergency';
       document.querySelector('#referral-label').textContent = referral.label;
