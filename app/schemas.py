@@ -3,7 +3,13 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class SummaryEvidence(BaseModel):
+    field: str = Field(description='ชื่อช่องข้อมูลใน summary ที่ข้อความนี้สนับสนุน')
+    quotes: list[str] = Field(description='ข้อความผู้ใช้ต้นฉบับแบบตรงตัว ห้ามแต่งหรือใช้ข้อความผู้ช่วย')
+
+
 class ClinicalSummary(BaseModel):
+    evidence: list[SummaryEvidence] = Field(default_factory=list)
     chief_complaint: str = Field(description="อาการสำคัญตามคำผู้ป่วยโดยไม่วินิจฉัย")
     onset_and_course: str = Field(description="เริ่มเมื่อไรและเปลี่ยนแปลงอย่างไร")
     symptom_location_and_character: str = Field(
