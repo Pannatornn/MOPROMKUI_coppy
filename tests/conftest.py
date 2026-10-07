@@ -36,7 +36,7 @@ def client(app):
 
 
 def create_case(client, complaint="ปวดท้องตั้งแต่เมื่อคืน"):
-    return client.post(
+    response = client.post(
         "/api/cases",
         json={
             "age_group": "18-39",
@@ -46,3 +46,8 @@ def create_case(client, complaint="ปวดท้องตั้งแต่เ
             "consent": True,
         },
     )
+    # Simulate following the explicit next-step link from the intake page.
+    # API requests no longer change the browser's appointment/auth session.
+    if response.status_code == 201:
+        client.get(response.json['booking_url'])
+    return response

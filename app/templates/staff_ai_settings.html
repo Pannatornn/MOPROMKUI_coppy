@@ -2,14 +2,15 @@
 {% block title %}ตั้งค่า AI — หมอพร้อมคุย{% endblock %}
 {% block content %}
 <a class="back-link" href="{{ url_for('main.staff_dashboard') }}">← กลับแดชบอร์ด</a>
-<section class="dashboard-header"><div><span class="eyebrow">ADMIN CONTROL</span><h1>ตั้งค่า API key</h1><p>เปลี่ยน key ได้ทันทีเมื่อ key เดิมติดลิมิต โดยไม่ต้อง deploy ใหม่</p></div><span class="role-badge">ADMIN · {{ current_user.username }}</span></section>
+<section class="dashboard-header"><div><span class="eyebrow">ADMIN CONTROL</span><h1>ตั้งค่า API key</h1><p>เปลี่ยน key ที่ใช้เรียกบริการได้โดยไม่ต้อง deploy ใหม่</p></div><span class="role-badge">ADMIN · {{ current_user.username }}</span></section>
 
 <section class="review-card create-user-card">
   <div class="card-heading"><div><span class="eyebrow">AI PROVIDERS</span><h2>API key สำรอง</h2><p>Key จะถูกเข้ารหัสก่อนบันทึก และจะไม่แสดงกลับในหน้านี้</p></div></div>
+  <p class="ai-note">การบันทึก key ยังไม่ใช่การยืนยันว่าเรียก AI สำเร็จ หาก Gemini แจ้ง 429 ให้ตรวจโควตาและแผนบริการใน Google AI Studio: โควตาคิดตามโปรเจกต์ การเปลี่ยน key ในโปรเจกต์เดิมไม่รีเซ็ตโควตา</p>
   <div class="user-list">
     {% for provider, credential in credentials.items() %}
-    <article class="user-row">
-      <div class="user-info"><strong>{{ provider.upper() }}{% if provider == active_provider %} · กำลังใช้งาน{% endif %}</strong><span>{% if credential %}กำหนดจากหน้าแอดมินแล้ว{% else %}กำลังใช้ค่าจาก Render Environment{% endif %}</span><small>{% if credential %}แก้ไขล่าสุดโดย @{{ credential.updated_by }} · {{ credential.updated_at|bangkok_time }}{% else %}หากยังไม่ได้ตั้งค่าใน Render ระบบจะใช้โหมดคำถามสำรอง{% endif %}</small></div>
+    <article class="user-row provider-row">
+      <div class="user-info"><strong>{{ provider.upper() }}{% if provider == active_provider %} · เลือกใช้งาน{% endif %}</strong><span>{% if credential %}กำหนดจากหน้าแอดมินแล้ว{% else %}กำลังใช้ค่าจาก Render Environment{% endif %}</span><small>{% if credential %}แก้ไขล่าสุดโดย @{{ credential.updated_by }} · {{ credential.updated_at|bangkok_time }}{% else %}หากยังไม่ได้ตั้งค่าใน Render ระบบจะใช้โหมดคำถามสำรอง{% endif %}</small></div>
       <div class="user-controls">
         <details><summary>เปลี่ยน API key</summary><form method="post" class="password-reset"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="provider" value="{{ provider }}"><input type="hidden" name="action" value="save"><input name="api_key" type="password" minlength="16" maxlength="512" autocomplete="new-password" placeholder="วาง API key ใหม่" required><button class="button button-primary button-small" type="submit">บันทึก</button></form></details>
         {% if credential %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="provider" value="{{ provider }}"><input type="hidden" name="action" value="clear"><button class="button button-ghost button-small" type="submit">กลับไปใช้ค่า Render</button></form>{% endif %}

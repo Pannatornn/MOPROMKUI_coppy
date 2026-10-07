@@ -37,11 +37,11 @@ def test_all_database_counts_not_just_latest_100(app, client):
         db.session.commit()
         counts = dashboard_counts()
         assert counts == {'collecting': 102, 'ready': 1, 'escalated': 1,
-                          'closed': 1, 'total': 105, 'urgent': 4}
+                          'closed': 1, 'total': 105, 'urgent': 3}
     login(client)
     page = client.get('/staff').get_data(as_text=True)
     assert re.search(r'data-count="total">105<', page)
-    assert re.search(r'data-count="urgent">4<', page)
+    assert re.search(r'data-count="urgent">3<', page)
     assert page.count('class="case-code"') == 100
     assert 'อัปเดตข้อมูลแบบเรียลไทม์' not in page
 

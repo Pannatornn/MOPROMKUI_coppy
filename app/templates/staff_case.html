@@ -3,8 +3,8 @@
 {% block content %}
 <a class="back-link" href="{{ url_for('main.staff_dashboard') }}">← กลับแดชบอร์ด</a>
 <section class="case-title-row">
-  <div><span class="eyebrow">CASE REVIEW</span><h1>{{ case.reference }}</h1><p>{{ case.created_at | bangkok_time }} · ช่วงอายุ {{ case.age_group }} · {{ {'female':'หญิง', 'male':'ชาย', 'intersex':'อินเตอร์เซ็กซ์', 'prefer_not_to_say':'ไม่ประสงค์ระบุ'}.get(case.sex_at_birth, case.sex_at_birth) }} · การตั้งครรภ์: {{ {'pregnant':'ตั้งครรภ์', 'possibly_pregnant':'อาจตั้งครรภ์', 'not_pregnant':'ไม่ได้ตั้งครรภ์', 'not_applicable':'ไม่เกี่ยวข้อง', 'unknown':'ไม่ทราบ'}.get(case.pregnancy_status, case.pregnancy_status) }}</p></div>
-  <div class="risk-stack"><span class="badge badge-{{ case.rule_urgency }}">RULE · {{ urgency_labels.get(case.rule_urgency, case.rule_urgency) }}</span><span class="badge badge-neutral">AI · {{ urgency_labels.get(case.ai_urgency_suggestion, case.ai_urgency_suggestion) }}</span><span class="badge badge-neutral">CLINICIAN · {{ urgency_labels.get(case.clinician_urgency, 'ยังไม่ประเมิน') }}</span></div>
+  <div><span class="eyebrow">CASE REVIEW</span><h1>{{ case.reference }}</h1><p>{{ case.created_at | bangkok_time }} · ช่วงอายุ {{ 'ไม่ทราบ' if case.age_group == 'unknown' else case.age_group }} · {{ {'female':'หญิง', 'male':'ชาย', 'intersex':'อินเตอร์เซ็กซ์', 'prefer_not_to_say':'ไม่ประสงค์ระบุ'}.get(case.sex_at_birth, case.sex_at_birth) }} · การตั้งครรภ์: {{ {'pregnant':'ตั้งครรภ์', 'possibly_pregnant':'อาจตั้งครรภ์', 'not_pregnant':'ไม่ได้ตั้งครรภ์', 'not_applicable':'ไม่เกี่ยวข้อง', 'unknown':'ไม่ทราบ'}.get(case.pregnancy_status, case.pregnancy_status) }}</p></div>
+  <div class="risk-stack"><span class="badge badge-{{ case.rule_urgency }}">RULE · {{ urgency_labels.get(case.rule_urgency, case.rule_urgency) }}</span><span class="badge badge-neutral">AI · {{ urgency_labels.get(case.ai_urgency_suggestion, case.ai_urgency_suggestion) }}{{ ' (ผลเก่า)' if not summary_is_current(case) and case.ai_summary else '' }}</span><span class="badge badge-neutral">CLINICIAN · {{ urgency_labels.get(case.clinician_urgency, 'ยังไม่ประเมิน') }}</span></div>
 </section>
 
 {% if case.rule_urgency == 'emergency' %}<div class="emergency-strip large"><strong>กฎความปลอดภัยพบสัญญาณฉุกเฉิน</strong><span>ตรวจบทสนทนาทันทีและทำตาม protocol ของสถานพยาบาล</span></div>{% endif %}
@@ -13,6 +13,7 @@
   <section class="review-card summary-card">
     <div class="card-heading"><div><span class="eyebrow">AI SUMMARY</span><h2>สรุปสำหรับบุคลากร</h2></div><span class="review-required">ต้องตรวจทาน</span></div>
     {% set s = case.ai_summary or {} %}
+    {% if s and not summary_is_current(case) %}<p class="ai-note" role="alert">สรุปนี้ไม่ครอบคลุมข้อความผู้ใช้ล่าสุด หรือเป็นสรุปรุ่นเดิมที่ยังยืนยันขอบเขตไม่ได้ กรุณาอ่านบทสนทนาต้นฉบับก่อนประเมิน</p>{% endif %}
     <dl class="summary-list">
       <dt>อาการสำคัญ</dt><dd>{{ s.get('chief_complaint', case.chief_complaint) }}</dd>
       <dt>เริ่มและดำเนินอาการ</dt><dd>{{ s.get('onset_and_course', 'ยังไม่ได้ข้อมูล') }}</dd>
@@ -28,10 +29,11 @@
       <dt>สังคม/การสัมผัส</dt><dd>{{ (s.get('social_and_exposure_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
       <dt>เดินทาง/ผู้สัมผัสป่วย</dt><dd>{{ (s.get('travel_and_sick_contacts') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
       <dt>ค่าสัญญาณชีพ</dt><dd>{{ (s.get('vital_signs_if_known') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ s.get('pregnancy_context', 'ยังไม่ได้ข้อมูล') }}</dd>
+      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ {'pregnant':'ตั้งครรภ์', 'possibly_pregnant':'อาจตั้งครรภ์', 'not_pregnant':'ไม่ได้ตั้งครรภ์', 'not_applicable':'ไม่เกี่ยวข้อง', 'unknown':'ไม่ทราบ'}.get(s.get('pregnancy_context'), s.get('pregnancy_context', 'ยังไม่ได้ข้อมูล')) }}</dd>
       <dt>ความกังวลของผู้รับบริการ</dt><dd>{{ s.get('patient_concerns', 'ยังไม่ได้ข้อมูล') }}</dd>
       <dt>ข้อมูลที่ยังขาด</dt><dd>{{ (s.get('missing_critical_information') or []) | join(', ') or '—' }}</dd>
     </dl>
+    {% if s.get('evidence') %}<details><summary>ข้อความผู้ใช้ที่อ้างอิงในสรุป</summary>{% for item in s.evidence %}<p><strong>{{ item.field }}</strong>: {{ item.quotes|join(' / ') }}</p>{% endfor %}</details>{% endif %}
     <p class="ai-note">สรุปนี้สร้างโดย AI และอาจผิดพลาด ต้องตรวจเทียบกับบทสนทนาต้นฉบับทุกครั้ง</p>
   </section>
 

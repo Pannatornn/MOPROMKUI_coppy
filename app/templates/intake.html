@@ -73,7 +73,7 @@
     <section id="staff-review-result" class="appointment-panel" aria-live="polite" hidden><span class="eyebrow">เจ้าหน้าที่ประเมินแล้ว</span><h2 id="staff-review-urgency"></h2><p id="staff-review-guidance"></p><p class="appointment-muted">หน้านี้ตรวจผลใหม่ทุก 15 วินาทีขณะเปิดอยู่ การประเมินไม่ใช่การยืนยันนัด</p></section>
     <section id="appointment-referral" class="appointment-panel" hidden>
       <span class="eyebrow">นัดหมายแพทย์</span><h2 id="referral-label"></h2><p id="referral-reason"></p>
-      <p class="appointment-muted">ทุกเคสไปต่อที่การนัดได้ ระบบเลือกแผนกให้ หรือส่งคำขอให้เจ้าหน้าที่จัดนัดตามความเร่งด่วน</p>
+      <p class="appointment-muted">เมื่อซักประวัติสิ้นสุด ระบบจะแสดงแพทย์ในแผนกที่แนะนำ หรือส่งคำขอให้เจ้าหน้าที่จัดนัดติดตามตามผลประเมิน</p>
       <a class="button button-primary" href="tel:1669" id="emergency-next-link" hidden>โทร 1669 · ไม่รอคิวนัด</a>
       <a class="button button-primary" href="{{ url_for('appointments.booking') }}" id="appointment-next-link">นัดหมาย →</a>
     </section>
@@ -88,4 +88,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='13') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='14') }}" defer></script>{% endblock %}

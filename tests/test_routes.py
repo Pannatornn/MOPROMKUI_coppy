@@ -44,7 +44,7 @@ def test_safe_questionnaire_collects_extended_history(client):
         assert response.status_code == 200
         latest = response.get_json()
 
-    assert latest["status"] == "ready"
+    assert latest["status"] == "escalated"
     assert len([item for item in latest["messages"] if item["role"] == "patient"]) == 11
 
 

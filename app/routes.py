@@ -71,8 +71,6 @@ def _case_for_patient(case_id: str) -> Case:
     token = request.headers.get("X-Case-Token", "")
     if not case or not token or not hmac.compare_digest(case.token_hash, _hash_token(token)):
         abort(404)
-    session['appointment_case_id'] = case.id
-    session['appointment_case_hash'] = case.token_hash
     return case
 
 
@@ -81,7 +79,12 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
         (event for event in reversed(case.audit_events) if event.action == "interview_turn"),
         None,
     )
-    if latest_ai_event:
+    latest_patient_id = max((m.id for m in case.messages if m.role == 'patient'), default=0)
+    ai_summary_current = bool(latest_ai_event and latest_ai_event.detail.get('patient_message_id') == latest_patient_id)
+    if case.rule_urgency in {'emergency', 'urgent'} and not ai_summary_current:
+        provider = None
+        ai_mode = 'safety_rule'
+    elif latest_ai_event:
         provider = latest_ai_event.detail.get("provider")
         ai_mode = "ai" if provider in {"gemini", "openai"} else "fallback"
     elif case.rule_urgency == "emergency":
@@ -90,9 +93,11 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
     else:
         provider = None
         ai_mode = "pending"
-    from .appointments import request_json
+    from .appointments import request_json, case_booking_url
     data = {
         "chat": _chat_state(case),
+        "booking_url": case_booking_url(case),
+        "ai_summary_current": ai_summary_current,
         "appointment_request": request_json(case),
         "id": case.id,
         "reference": case.reference,
@@ -165,6 +170,9 @@ def _apply_urgent_signals(case: Case, text: str) -> bool:
 
 def _apply_ai_result(case: Case, result: AIResult) -> str:
     turn = result.turn
+    if result.provider in {'openai', 'gemini'}:
+        from .ai import ground_summary
+        ground_summary(case, turn)
     case.ai_summary = turn.summary.model_dump()
     case.ai_urgency_suggestion = turn.urgency_suggestion
 
@@ -174,9 +182,11 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
             or turn.urgency_suggestion == "urgent"
             or turn.summary.suggested_care_pathway in {"emergency_now", "same_day_assessment"}):
         case.status = "escalated"
-        if case.rule_urgency != "emergency":
+        urgent = bool(turn.red_flags_reported or turn.urgency_suggestion == 'urgent' or
+                      turn.summary.suggested_care_pathway in {'emergency_now', 'same_day_assessment'})
+        if urgent and case.rule_urgency != "emergency":
             case.rule_urgency = "urgent"
-        output = REVIEW_MESSAGE
+        output = REVIEW_MESSAGE if urgent else 'จบการซักประวัติอัตโนมัติแล้วครับ ข้อมูลยังต้องให้เจ้าหน้าที่ตรวจ ใช้ปุ่มด้านล่างส่งคำขอเพื่อจัดขั้นตอนต่อ'
     elif patient_turns >= MAX_PATIENT_TURNS:
         case.status = "escalated" if needs_more else "ready"
         output = ("จบการซักประวัติอัตโนมัติแล้วครับ ข้อมูลสำคัญยังไม่ครบ "
@@ -192,7 +202,8 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
     else:
         case.status = "collecting"
         if turn.status == "ready":
-            output = turn.remaining_questions[0] if turn.remaining_questions else _fallback_question(case)
+            output = (turn.remaining_questions[0] if turn.remaining_questions else
+                      'ยังต้องยืนยันข้อมูลต่อไปนี้: ' + turn.summary.missing_critical_information[0] + ' กรุณาเล่ารายละเอียดเพิ่มเติมครับ')
         else:
             output = turn.assistant_message
 
@@ -218,6 +229,7 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
             "analysis_scope": "full_transcript_every_turn",
             "request_id": result.request_id,
             "error_code": result.error_code,
+            "patient_message_id": max((m.id for m in case.messages if m.role == 'patient'), default=0),
         },
     )
     return output
@@ -334,8 +346,6 @@ def create_case():
     db.session.commit()
 
     payload = _case_json(case)
-    session['appointment_case_id'] = case.id
-    session['appointment_case_hash'] = case.token_hash
     payload["token"] = token
     return jsonify(payload), 201
 
@@ -387,7 +397,10 @@ def staff_login():
             user.password_hash, request.form.get("password", "")
         )
         if user and password_ok:
+            patient_context = {key: session[key] for key in
+                               ('appointment_case_id', 'appointment_case_hash', 'booking_owner') if key in session}
             session.clear()
+            session.update(patient_context)
             session["staff_authenticated"] = True
             session["staff_user_id"] = user.id
             session["staff_role"] = user.role
@@ -405,7 +418,10 @@ def staff_login():
 def staff_logout():
     _staff_required()
     _require_csrf()
+    patient_context = {key: session[key] for key in
+                       ('appointment_case_id', 'appointment_case_hash', 'booking_owner') if key in session}
     session.clear()
+    session.update(patient_context)
     return redirect(url_for("main.staff_login"))
 
 

@@ -386,3 +386,11 @@ tbody tr:hover { background: #fcfcfd; }
   .account-state { grid-column: 2; }
   .user-controls { grid-column: 2; flex-wrap: wrap; }
 }
+
+/* Provider rows have two columns, unlike the staff-user management grid. */
+.user-row.provider-row { grid-template-columns: minmax(0, 1fr) auto; }
+.provider-row .user-info { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .user-row.provider-row { grid-template-columns: minmax(0, 1fr); }
+  .provider-row .user-controls { grid-column: 1; justify-content: flex-start; flex-wrap: wrap; }
+}

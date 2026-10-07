@@ -34,12 +34,15 @@ def recommend_department(case):
         return {'state': 'review', 'department': None,
                 'label': 'คำแนะนำจากเจ้าหน้าที่' if review['disposition'] == 'care' else 'รอเจ้าหน้าที่ดำเนินการ',
                 'reason': review['guidance'], 'source': 'staff'}
-    if (case.status == 'escalated' or case.rule_urgency == 'urgent'
+    if (case.rule_urgency == 'urgent'
             or case.ai_urgency_suggestion in {'urgent', 'emergency'}
             or case.clinician_urgency in {'urgent', 'emergency'}
             or any(find_urgent_signals(t) for t in texts)):
         return {'state': 'review', 'department': None, 'label': 'ให้เจ้าหน้าที่ประเมินก่อนนัด',
                 'reason': 'ข้อมูลนี้ควรได้รับการตรวจโดยเร็ว โปรดติดต่อสถานพยาบาลเพื่อประเมิน ไม่ควรรอคิวนัดปกติ หากเป็นเหตุฉุกเฉินให้โทร 1669'}
+    if case.status == 'escalated':
+        return {'state': 'review', 'department': None, 'label': 'ให้เจ้าหน้าที่ตรวจข้อมูลก่อนนัด',
+                'reason': 'ระบบยังยืนยันข้อมูลสำคัญไม่ได้ จึงต้องให้เจ้าหน้าที่ตรวจและจัดขั้นตอนต่อ การส่งประเมินไม่ได้หมายความว่าพบอาการฉุกเฉิน หากมีอาการรุนแรงขึ้นให้ติดต่อสถานพยาบาลโดยตรง'}
     if case.status != 'ready':
         return {'state': 'collecting', 'department': None, 'label': 'ซักประวัติให้ครบก่อน',
                 'reason': 'ระบบจะจัดแผนกและแสดงแพทย์ที่เหมาะกับอาการ หลังรวบรวมข้อมูลซักประวัติครบแล้ว'}

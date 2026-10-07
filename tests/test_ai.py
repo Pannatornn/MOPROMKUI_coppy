@@ -15,7 +15,7 @@ from app.schemas import ClinicalSummary, InterviewTurn
 
 
 def test_ai_prompt_analyzes_every_turn_without_prescribing_treatment():
-    assert PROMPT_VERSION == "thai-intake-v3.1"
+    assert PROMPT_VERSION == "thai-intake-v3.2"
     assert "วิเคราะห์คำตอบล่าสุดของผู้ใช้ทุกข้อความ" in SYSTEM_PROMPT
     assert "suggested_care_pathway" in SYSTEM_PROMPT
     assert "ห้ามสั่งยา" in SYSTEM_PROMPT
@@ -182,7 +182,7 @@ def test_fallback_explains_rate_limit_without_exposing_provider_details(app):
         db.session.flush()
         result = _fallback(case, "RateLimitError")
         assert "ถึงขีดจำกัด" in result.turn.assistant_message
-        assert "API key นี้" in result.turn.assistant_message
+        assert "เปลี่ยน key" not in result.turn.assistant_message
 
 
 @pytest.mark.parametrize(
