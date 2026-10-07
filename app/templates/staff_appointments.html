@@ -6,11 +6,12 @@
   <div class="appointment-demo">ตารางหมอสมมติสำหรับทดลอง เจ้าหน้าที่เพิ่มคิว ปิดรับคิว และยกเลิกนัดได้แยกตามแพทย์</div>
   <section class="appointment-panel"><h2>คำขอให้จัดนัด · เรียงเคสฉุกเฉินและเร่งด่วนก่อน</h2>
     {% for ticket in pending_requests %}<article class="appointment-panel"><strong>{{ ticket.reference }} · {{ urgency_labels.get(ticket.urgency, ticket.urgency) }}</strong><p><a href="{{ url_for('main.staff_case', case_id=ticket.case_id) }}">ตรวจเคส {{ ticket.case.reference }} →</a> · {{ ticket.created_at|bangkok_time }}</p>
+      {% if ticket.case.status in ['collecting', 'closed'] %}<p>เคสนี้{{ 'ยังต้องประเมินก่อนจัดนัด' if ticket.case.status == 'collecting' else 'ปิดแล้ว ไม่รับนัดใหม่' }} โปรดเปิดเคสตรวจผลและขั้นตอนต่อ</p>{% else %}
       <p>จัดให้ {{ selected.name }} · {{ day|appointment_date }} · เปลี่ยนแพทย์และวันในตัวเลือกตารางด้านล่าง</p>
       <form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="case_id" value="{{ ticket.case_id }}"><input type="hidden" name="action" value="assign_request">
       <label>เวลาว่าง<select name="slot_id" required><option value="">เลือกเวลา</option>{% for slot in slots if slot.state == 'free' and slot.starts_at|appointment_future %}<option value="{{ slot.id }}">{{ slot.starts_at|bangkok_time('%H:%M') }}</option>{% endfor %}</select></label>
       <label class="consent-row"><input type="checkbox" name="followup" value="yes" {% if ticket.urgency in ['urgent', 'emergency'] %}required{% endif %}><span>นัดนี้เป็นนัดติดตามภายหลัง ไม่แทนการดูแลฉุกเฉิน/เร่งด่วน ต้องตรวจเคสและจัดการดูแลเร่งด่วนก่อน</span></label>
-      <button class="button button-primary" type="submit">ยืนยันแพทย์และเวลานัดให้ผู้รับบริการ</button></form>
+      <button class="button button-primary" type="submit">ยืนยันแพทย์และเวลานัดให้ผู้รับบริการ</button></form>{% endif %}
     </article>{% else %}<p>ยังไม่มีคำขอที่รอจัดนัด</p>{% endfor %}
   </section>
   <section class="appointment-panel">
@@ -22,7 +23,7 @@
     <h2>{{ selected.name }} · {{ day|appointment_date }}</h2><p>{{ selected.schedule_label }}</p>
     <div class="staff-slot-list">
       {% for slot in slots %}<article class="staff-slot">
-        <strong>{{ slot.starts_at|bangkok_time('%H:%M') }}</strong><span>{{ {'free':'ว่าง', 'blocked':'ปิดรับ', 'booked':'จองแล้ว'}.get(slot.state, slot.state) }}</span>
+        <strong>{{ slot.starts_at|bangkok_time('%H:%M') }}</strong><span>{{ 'ผ่านเวลาแล้ว' if not slot.starts_at|appointment_future and slot.state == 'free' else {'free':'ว่าง', 'blocked':'ปิดรับ', 'booked':'จองแล้ว'}.get(slot.state, slot.state) }}</span>
         {% if slot.state in ['free', 'blocked'] and slot.starts_at|appointment_future %}
         <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="doctor" value="{{ selected.id }}"><input type="hidden" name="day" value="{{ day.isoformat() }}"><input type="hidden" name="slot_id" value="{{ slot.id }}"><input type="hidden" name="action" value="{{ 'block' if slot.state == 'free' else 'open' }}"><button class="button button-ghost button-small" type="submit">{{ 'ปิดรับคิวนี้' if slot.state == 'free' else 'เปิดรับคิวนี้' }}</button></form>
         {% endif %}
