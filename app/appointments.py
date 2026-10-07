@@ -95,10 +95,16 @@ class AppointmentRequest(db.Model):
 def request_json(case):
     ticket = db.session.get(AppointmentRequest, case.id)
     if not ticket:
-        return None
-    result = {'reference': ticket.reference, 'status': ticket.status}
-    if ticket.appointment:
+        item = db.session.scalar(db.select(Appointment).join(AppointmentReferral).where(
+            AppointmentReferral.case_id == case.id).order_by(
+                sql_case((Appointment.status == 'booked', 0), else_=1), Appointment.id.desc()))
+        if not item:
+            return None
+        result = {'reference': item.reference, 'status': 'confirmed'}
+    else:
+        result = {'reference': ticket.reference, 'status': ticket.status}
         item = ticket.appointment
+    if item:
         local = _local(item.starts_at)
         result.update(appointment_reference=item.reference, appointment_status=item.status,
                       appointment_id=item.id, cancellable=_local(item.starts_at) > _now(),
@@ -199,6 +205,9 @@ def request_appointment():
     case, referral = _referral_context()
     if not case or request.form.get('case_id') != case.id:
         abort(409, 'Intake case changed; refresh the page')
+    receipt = request_json(case)
+    if receipt and receipt.get('appointment_status') == 'booked':
+        return redirect(url_for('appointments.booking'), code=303)
     existing = db.session.get(AppointmentRequest, case.id)
     if existing and existing.appointment and existing.appointment.status == 'cancelled':
         changed = db.session.execute(update(AppointmentRequest).execution_options(synchronize_session=False).where(
@@ -236,9 +245,34 @@ def book():
     if ticket and ticket.status == 'pending':
         flash('ส่งคำขอให้เจ้าหน้าที่จัดนัดแล้ว ดูผลในหน้ารายละเอียดนัด', 'success')
         return redirect(url_for('appointments.booking'), code=303)
+    receipt = request_json(case)
+    if receipt and receipt.get('appointment_status') == 'booked':
+        flash('เคสนี้มีนัดยืนยันแล้ว ดูเลขนัดและวันเวลาด้านล่าง หากต้องเปลี่ยนเวลาให้ยกเลิกนัดเดิมก่อน', 'success')
+        return redirect(url_for('appointments.booking'), code=303)
     slot = db.get_or_404(AppointmentSlot, request.form.get("slot_id", type=int))
     if slot.doctor.specialty != referral['label']:
         abort(409, 'Doctor is outside the recommended department')
+    # A unique case request is claimed in the same transaction as the slot.
+    # This also prevents double clicks from reserving different slots for one case.
+    if ticket:
+        claimed_case = db.session.execute(update(AppointmentRequest).execution_options(synchronize_session=False).where(
+            AppointmentRequest.case_id == case.id, AppointmentRequest.status == 'confirmed',
+            AppointmentRequest.appointment_id == ticket.appointment_id
+        ).values(appointment_id=None, owner_hash=_owner())).rowcount
+        if claimed_case != 1:
+            db.session.rollback()
+            flash('สถานะนัดเปลี่ยนแล้ว กรุณาดูรายการนัดล่าสุด', 'error')
+            return redirect(url_for('appointments.booking'), code=303)
+    else:
+        ticket = AppointmentRequest(case_id=case.id, reference='REQ-' + secrets.token_hex(4).upper(),
+            owner_hash=_owner(), urgency=_request_urgency(case), status='confirmed')
+        db.session.add(ticket)
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            flash('เคสนี้กำลังจองหรือมีนัดแล้ว กรุณาดูรายการล่าสุด', 'error')
+            return redirect(url_for('appointments.booking'), code=303)
     # Claim the slot in the database, so simultaneous bookings cannot both win.
     claimed = db.session.execute(update(AppointmentSlot).execution_options(synchronize_session=False).where(
         AppointmentSlot.id == slot.id, AppointmentSlot.state == "free",
@@ -254,6 +288,11 @@ def book():
     appointment.referral = AppointmentReferral(case_id=case.id, department=referral['department'], reason=referral['reason'][:260])
     db.session.add(appointment)
     try:
+        db.session.flush()
+        db.session.execute(update(AppointmentRequest).where(AppointmentRequest.case_id == case.id).values(
+            status='confirmed', appointment_id=appointment.id))
+        db.session.add(AuditEvent(case=case, actor='patient', action='appointment_booked',
+            detail={'reference': appointment.reference, 'doctor_id': appointment.doctor_id}))
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
@@ -283,7 +322,8 @@ def cancel(appointment_id):
     if appointment.owner_hash != owner:
         case, _ = _referral_context()
         ticket = db.session.get(AppointmentRequest, case.id) if case else None
-        if not ticket or ticket.appointment_id != appointment.id:
+        if not ((ticket and ticket.appointment_id == appointment.id) or
+                (case and appointment.referral and appointment.referral.case_id == case.id)):
             abort(404)
         _cancel(appointment)
     else:

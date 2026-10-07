@@ -57,11 +57,11 @@ def test_emergency_is_escalated_before_ai(client):
     assert "1669" in data["messages"][-1]["content"]
 
 
-def test_severe_pain_is_marked_urgent_and_interview_continues(client):
+def test_severe_pain_is_marked_urgent_and_interview_stops(client):
     response = create_case(client, "ปวดท้องมากจนทนไม่ไหว ระดับความปวด 9/10")
     data = response.get_json()
     assert response.status_code == 201
-    assert data["status"] == "collecting"
+    assert data["status"] == "escalated"
     assert data["urgency"] == "urgent"
     assert "ตรวจโดยเร็ว" in data["messages"][-1]["content"]
 
@@ -75,7 +75,7 @@ def test_severe_pain_in_follow_up_answer_is_marked_urgent(client):
     )
     data = response.get_json()
     assert response.status_code == 200
-    assert data["status"] == "collecting"
+    assert data["status"] == "escalated"
     assert data["urgency"] == "urgent"
     assert "ตรวจโดยเร็ว" in data["messages"][-1]["content"]
 

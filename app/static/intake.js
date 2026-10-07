@@ -84,21 +84,24 @@
 
     const status = document.querySelector("#case-status");
     const closedForPatient = data.urgency === "emergency" || data.clinician_urgency === "emergency" || ["ready", "escalated", "closed"].includes(data.status);
-    const urgentReview = data.urgency === "urgent" && !(data.appointment_referral?.source === "staff" && data.appointment_referral.state === "ready");
+    const urgentReview = [data.urgency, data.ai_urgency, data.clinician_urgency].includes("urgent") && !(data.appointment_referral?.source === "staff" && data.appointment_referral.state === "ready");
     setStep(closedForPatient ? 3 : 2);
     status.hidden = false;
     if (data.urgency === "emergency" || data.clinician_urgency === "emergency") {
       status.className = "case-status status-emergency";
       status.innerHTML = "<strong>พบสัญญาณที่อาจฉุกเฉิน</strong><span>หยุดตอบและโทร 1669 ทันที</span>";
-    } else if (urgentReview || data.status === "escalated") {
+    } else if (urgentReview) {
       status.className = "case-status status-urgent";
       status.innerHTML = "<strong>พบอาการที่ควรตรวจโดยเร็ว</strong><span>เคสอยู่ในแดชบอร์ดให้เจ้าหน้าที่ประเมิน หากอาการรุนแรงขึ้นหรือไม่ปลอดภัยให้โทร 1669</span>";
+    } else if (data.status === "escalated") {
+      status.className = "case-status status-urgent";
+      status.innerHTML = "<strong>จบการซักประวัติ · ต้องให้เจ้าหน้าที่ตรวจข้อมูล</strong><span>ข้อมูลยังไม่เพียงพอหรือยังมีข้อสงสัย จึงยังไม่เปิดคิวนัดปกติ ส่งคำขอให้เจ้าหน้าที่จัดขั้นตอนต่อได้ด้านล่าง</span>";
     } else if (data.status === "closed") {
       status.className = "case-status status-ready";
       status.innerHTML = "<strong>ปิดเคสแล้ว</strong><span>การซักประวัติเคสนี้สิ้นสุดแล้ว</span>";
     } else if (closedForPatient) {
       status.className = "case-status status-ready";
-      status.innerHTML = "<strong>ส่งข้อมูลเรียบร้อยแล้ว</strong><span>ข้อมูลพร้อมตรวจ ยังไม่ได้หมายความว่าเจ้าหน้าที่ประเมินหรือยืนยันนัดแล้ว</span>";
+      status.innerHTML = "<strong>ซักประวัติเสร็จแล้ว</strong><span>ไปต่อที่การนัดหมายด้านล่างได้ การคัดกรองเบื้องต้นไม่ใช่การวินิจฉัยหรือการยืนยันนัด</span>";
     } else {
       status.className = "case-status status-collecting";
       status.innerHTML = "<strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span>";
@@ -113,26 +116,27 @@
     const canSend = data.chat?.can_send ?? !closedForPatient;
     messageForm.hidden = !canSend;
     const chatNotice = document.querySelector('#chat-notice');
-    chatNotice.hidden = canSend && !data.chat?.supplementary;
-    chatNotice.textContent = canSend
-      ? 'ข้อมูลพร้อมตรวจแล้ว คุณยังพิมพ์คำตอบหรือข้อมูลเพิ่มเติมได้'
-      : (data.chat?.reason || 'การซักประวัติสิ้นสุดแล้ว ดูขั้นตอนต่อด้านบน');
-    messageInput.placeholder = data.chat?.supplementary ? 'พิมพ์ข้อมูลเพิ่มเติมของคุณ...' : 'พิมพ์คำตอบของคุณ...';
+    chatNotice.hidden = canSend;
+    chatNotice.textContent = data.chat?.reason || 'การซักประวัติสิ้นสุดแล้ว ดูขั้นตอนต่อด้านล่าง';
+    messageInput.placeholder = 'พิมพ์คำตอบของคุณ...';
     const referral = data.appointment_referral;
     const referralPanel = document.querySelector('#appointment-referral');
-    referralPanel.hidden = !referral;
+    referralPanel.hidden = !referral || referral.state === 'collecting';
     if (!referralPanel.hidden) {
+      document.querySelector('#emergency-next-link').hidden = referral.state !== 'emergency';
       document.querySelector('#referral-label').textContent = referral.label;
       document.querySelector('#referral-reason').textContent = referral.reason;
-      document.querySelector('#appointment-next-link').textContent = referral.state === 'ready' ? 'เลือกหมอและเวลานัด →' : 'นัดหมาย / ส่งคำขอนัด →';
+      document.querySelector('#appointment-next-link').textContent = referral.state === 'ready' ? 'เลือกแพทย์และเวลานัด →' : referral.state === 'emergency' ? 'ขอนัดติดตามภายหลัง →' : 'ส่งคำขอให้เจ้าหน้าที่จัดนัด →';
     }
     const ticket = data.appointment_request;
     document.querySelector('#appointment-request-result').hidden = !ticket;
     if (ticket) {
+      if ((ticket.appointment_status === 'booked' || ticket.status === 'pending') && referral.state === 'ready') referralPanel.hidden = true;
       document.querySelector('#appointment-request-text').textContent = ticket.status === 'confirmed'
         ? (ticket.appointment_status === 'cancelled' ? `นัด ${ticket.appointment_reference} ยกเลิกแล้ว` : `ยืนยันนัด ${ticket.appointment_reference} · ${ticket.doctor} · ${ticket.time} น. เวลาไทย`)
         : `ส่งคำขอ ${ticket.reference} แล้ว ยังไม่ยืนยันวันเวลา ดูสถานะจากหน้านี้ หากเร่งด่วนให้ติดต่อสถานพยาบาลโดยตรง`;
     }
+    if (reset && !canSend) document.querySelector('#next-care-step').scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const api = async (url, options = {}) => {

@@ -117,12 +117,11 @@ def _request_payload(case: Case) -> dict:
         },
         "transcript": transcript,
         "patient_turn_count": len([item for item in transcript if item["role"] == "patient"]),
-        "minimum_patient_turns": 8,
         "maximum_patient_turns": 12,
         "instruction": (
             "วิเคราะห์คำตอบล่าสุดร่วมกับ transcript ทั้งหมด อัปเดตทุกช่องใน summary "
             "ระบุเส้นทางเข้ารับบริการและเหตุผลจากข้อเท็จจริงโดยไม่วินิจฉัยหรือเสนอวิธีรักษา "
-            "จากนั้นถามต่อเพียงหนึ่งคำถามที่สำคัญที่สุด ห้ามขอข้อมูลระบุตัวบุคคล "
+            "ถ้ายังขาดข้อมูลสำคัญให้ถามต่อเพียงหนึ่งคำถาม ถ้าครบแล้วให้จบด้วย status=ready โดยไม่ถามต่อ ห้ามขอข้อมูลระบุตัวบุคคล "
             "และห้ามจบก่อนข้อมูลสำคัญครบ"
         ),
     }

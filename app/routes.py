@@ -46,7 +46,6 @@ PREGNANCY_OPTIONS = {"pregnant", "possibly_pregnant", "not_pregnant", "not_appli
 URGENCY_OPTIONS = {"routine", "soon", "urgent", "emergency"}
 STATUS_OPTIONS = {"collecting", "ready", "escalated", "closed"}
 STAFF_ROLES = {"admin", "staff"}
-MIN_PATIENT_TURNS = 8
 MAX_PATIENT_TURNS = 12
 DIRECT_IDENTIFIER = re.compile(r"(?:\b\d{13}\b|\b0\d{8,9}\b|[\w.+-]+@[\w-]+\.[\w.-]+)")
 USERNAME_PATTERN = re.compile(r"^[a-z0-9._-]{3,32}$")
@@ -99,6 +98,7 @@ def _case_json(case: Case, include_messages: bool = True) -> dict:
         "reference": case.reference,
         "status": case.status,
         "urgency": case.rule_urgency,
+        "ai_urgency": case.ai_urgency_suggestion,
         "created_at": case.created_at.isoformat(),
         "ai_mode": ai_mode,
         "ai_provider": provider if ai_mode == "ai" else None,
@@ -121,9 +121,9 @@ def _chat_state(case: Case) -> dict:
         return {"can_send": False, "reason": "เคสนี้ปิดแล้ว หากมีเรื่องใหม่ให้เริ่มเคสใหม่"}
     if case.status == "escalated":
         return {"can_send": False, "reason": "พักการซักประวัติเพื่อให้เจ้าหน้าที่ประเมิน ดูคำแนะนำและสถานะนัดด้านบน"}
-    if case.status == "ready" and current_review(case):
-        return {"can_send": False, "reason": "เจ้าหน้าที่ประเมินแล้ว กรุณาดำเนินการตามคำแนะนำด้านบน"}
-    return {"can_send": True, "reason": "", "supplementary": case.status == "ready"}
+    if case.status == "ready":
+        return {"can_send": False, "reason": "ซักประวัติเสร็จแล้ว ไปต่อที่การนัดหมายด้านล่างได้เลย คำถามก่อนหน้านี้เป็นประวัติการสนทนา"}
+    return {"can_send": True, "reason": ""}
 
 
 def _audit(case: Case, actor: str, action: str, detail: dict | None = None) -> None:
@@ -169,23 +169,25 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
     case.ai_urgency_suggestion = turn.urgency_suggestion
 
     patient_turns = sum(1 for message in case.messages if message.role == "patient")
-    if turn.status == "escalate_review" or turn.red_flags_reported:
+    needs_more = bool(turn.remaining_questions or turn.summary.missing_critical_information)
+    if (turn.status == "escalate_review" or turn.red_flags_reported
+            or turn.urgency_suggestion == "urgent"
+            or turn.summary.suggested_care_pathway in {"emergency_now", "same_day_assessment"}):
         case.status = "escalated"
         if case.rule_urgency != "emergency":
             case.rule_urgency = "urgent"
         output = REVIEW_MESSAGE
     elif patient_turns >= MAX_PATIENT_TURNS:
+        case.status = "escalated" if needs_more else "ready"
+        output = ("จบการซักประวัติอัตโนมัติแล้วครับ ข้อมูลสำคัญยังไม่ครบ "
+                  "จึงต้องให้เจ้าหน้าที่ประเมินก่อนจัดนัด ใช้ปุ่มส่งคำขอด้านล่างได้ "
+                  "หากอาการรุนแรงขึ้นให้เข้ารับการดูแลโดยเร็ว" if needs_more else
+                  "ซักประวัติเสร็จแล้วครับ ไปต่อที่การนัดหมายด้านล่างเพื่อเลือกแพทย์และเวลาได้เลย")
+    elif turn.status == "ready" and not needs_more:
         case.status = "ready"
         output = (
-            "ขอบคุณครับ ข้อมูลพร้อมให้บุคลากรทางการแพทย์ตรวจแล้ว "
-            "หากอาการรุนแรงขึ้นหรือมีเหตุฉุกเฉินให้โทร 1669"
-        )
-    elif turn.status == "ready" and patient_turns >= MIN_PATIENT_TURNS:
-        case.status = "ready"
-        output = (
-            "ข้อมูลเบื้องต้นพร้อมให้บุคลากรตรวจแล้วครับ "
-            "หากมีข้อมูลเพิ่มเติมหรือยังตอบไม่ครบ สามารถพิมพ์เพิ่มในช่องด้านล่างได้ "
-            "หรือไปต่อที่นัดหมายแพทย์ได้ครับ"
+            "ซักประวัติเสร็จแล้วครับ ข้อมูลพร้อมให้บุคลากรตรวจ "
+            "ไปต่อที่การนัดหมายด้านล่างเพื่อเลือกแพทย์และเวลาได้เลย"
         )
     else:
         case.status = "collecting"
@@ -196,7 +198,7 @@ def _apply_ai_result(case: Case, result: AIResult) -> str:
 
     if not ai_message_is_safe(output):
         output = SAFE_FALLBACK_MESSAGE
-        case.status = "ready"
+        case.status = "escalated"
         _audit(case, "output_guard", "unsafe_ai_output_blocked")
 
     _audit(
@@ -324,10 +326,8 @@ def create_case():
     if _apply_red_flags(case, chief):
         assistant_text = EMERGENCY_MESSAGE
     elif _apply_urgent_signals(case, chief):
-        assistant_text = (
-            f"{URGENT_PAIN_MESSAGE}\n\n"
-            f"{_apply_ai_result(case, generate_interview_turn(case))}"
-        )
+        case.status = "escalated"
+        assistant_text = URGENT_PAIN_MESSAGE + "\n\nหยุดการซักประวัติเพื่อให้ได้รับการประเมินโดยเร็ว ไม่ต้องรอจองคิวปกติ"
     else:
         assistant_text = _apply_ai_result(case, generate_interview_turn(case))
     db.session.add(Message(case=case, role="assistant", content=assistant_text))
@@ -366,10 +366,8 @@ def add_message(case_id: str):
     if _apply_red_flags(case, content):
         assistant_text = EMERGENCY_MESSAGE
     elif _apply_urgent_signals(case, content):
-        assistant_text = (
-            f"{URGENT_PAIN_MESSAGE}\n\n"
-            f"{_apply_ai_result(case, generate_interview_turn(case))}"
-        )
+        case.status = "escalated"
+        assistant_text = URGENT_PAIN_MESSAGE + "\n\nหยุดการซักประวัติเพื่อให้ได้รับการประเมินโดยเร็ว ไม่ต้องรอจองคิวปกติ"
     else:
         assistant_text = _apply_ai_result(case, generate_interview_turn(case))
     db.session.add(Message(case=case, role="assistant", content=assistant_text))

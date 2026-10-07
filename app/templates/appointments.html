@@ -50,7 +50,7 @@
           <span><strong>{{ slot.starts_at|bangkok_time('%H:%M') }}</strong><small>{{ {'free':'ว่าง', 'booked':'จองแล้ว', 'blocked':'ปิดรับ'}.get(slot.state, 'ไม่ว่าง') }}</small></span>
         </label>{% endfor %}
       </div>
-      {% if slots|selectattr('state', 'equalto', 'free')|list %}<button class="button button-primary" type="submit">ยืนยันนัดทดลอง</button>{% endif %}
+      {% if slots|selectattr('state', 'equalto', 'free')|list %}<p class="appointment-muted">เมื่อยืนยัน ระบบจะล็อกคิวนี้และออกเลขนัดให้คุณ ตารางในระบบนี้ยังเป็นตารางสมมติ</p><button class="button button-primary" type="submit">ยืนยันจองคิวนี้</button>{% endif %}
     </form>
     {% else %}<div class="appointment-empty">ไม่มีคิวว่างในวันนี้ ลองเลือกวันว่างจากบัตรแพทย์ด้านบน หรือเลือกหมอคนอื่น</div>{% endif %}
   </section>
