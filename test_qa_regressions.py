@@ -1,4 +1,4 @@
-from .conftest import create_case
+from tests.conftest import app, client, create_case
 from app.extensions import db
 from app.models import Case
 
@@ -71,7 +71,7 @@ def test_late_ai_response_does_not_log_staff_out(app,monkeypatch):
 
 def test_authenticated_polling_never_refreshes_staff_cookie(client):
     case = create_case(client).json
-    from .test_case_display import login
+    from tests.test_case_display import login
     login(client)
     response = client.get('/api/cases/'+case['id'], headers={'X-Case-Token':case['token']})
     assert response.status_code == 200
@@ -105,7 +105,7 @@ def test_safety_escalation_marks_previous_ai_summary_stale(client,app):
     response=client.post('/api/cases/'+case['id']+'/messages',headers={'X-Case-Token':case['token']},json={'content':'หายใจไม่ออก'})
     assert not response.json['ai_summary_current']
     assert response.json['ai_mode']=='safety_rule'
-    from .test_case_display import login
+    from tests.test_case_display import login
     login(client)
     page=client.get('/staff/cases/'+case['id']).get_data(as_text=True)
     assert 'สรุปนี้ไม่ครอบคลุมข้อความผู้ใช้ล่าสุด' in page
