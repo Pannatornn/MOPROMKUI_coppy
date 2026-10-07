@@ -110,7 +110,14 @@
       document.querySelector('#staff-review-guidance').textContent = review.guidance || 'เจ้าหน้าที่บันทึกผลประเมินแล้ว แต่ยังไม่ได้ระบุขั้นตอนต่อ';
       document.querySelector('#staff-review-urgency').textContent = `ผลประเมิน: ${{routine:'ทั่วไป', soon:'ควรตรวจเร็ว', urgent:'เร่งด่วน', emergency:'ฉุกเฉิน'}[review.urgency] || 'ยังไม่ระบุ'}`;
     }
-    messageForm.hidden = closedForPatient;
+    const canSend = data.chat?.can_send ?? !closedForPatient;
+    messageForm.hidden = !canSend;
+    const chatNotice = document.querySelector('#chat-notice');
+    chatNotice.hidden = canSend && !data.chat?.supplementary;
+    chatNotice.textContent = canSend
+      ? 'ข้อมูลพร้อมตรวจแล้ว คุณยังพิมพ์คำตอบหรือข้อมูลเพิ่มเติมได้'
+      : (data.chat?.reason || 'การซักประวัติสิ้นสุดแล้ว ดูขั้นตอนต่อด้านบน');
+    messageInput.placeholder = data.chat?.supplementary ? 'พิมพ์ข้อมูลเพิ่มเติมของคุณ...' : 'พิมพ์คำตอบของคุณ...';
     const referral = data.appointment_referral;
     const referralPanel = document.querySelector('#appointment-referral');
     referralPanel.hidden = !referral;
@@ -138,9 +145,10 @@
       },
     });
     const data = await response.json().catch(() => ({ error: "เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์" }));
-    if (!response.ok && !(response.status === 409 && data.id && data.messages)) {
+    if (!response.ok) {
       const error = new Error(data.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
       error.status = response.status;
+      error.data = data;
       throw error;
     }
     return data;
@@ -216,12 +224,13 @@
       messageInput.value = "";
       renderCase(data, true);
     } catch (error) {
+      if (error.status === 409 && error.data?.id === caseId) renderCase(error.data, true);
       setError("#chat-error", error.message);
     } finally {
       sending = false;
       typingIndicator.hidden = true;
       setBusy(messageForm, false);
-      messageInput.focus();
+      if (!messageForm.hidden) messageInput.focus();
     }
   });
 
