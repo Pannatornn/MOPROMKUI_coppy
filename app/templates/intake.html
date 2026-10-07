@@ -57,16 +57,9 @@
       <div><span class="eyebrow">GUIDED INTERVIEW</span><h2>ซักประวัติ</h2><span id="ai-mode" class="ai-mode">กำลังเชื่อมต่อ AI</span></div>
       <div class="chat-actions"><div class="case-reference">รหัสเคส <strong id="case-reference">—</strong></div><button id="new-case-button" class="button button-ghost button-small" type="button">＋ เริ่มเคสใหม่</button></div>
     </div>
-    <div class="interview-progress"><div><span id="question-progress">กำลังเริ่มต้น</span><small>โดยทั่วไปเก็บข้อมูล 8–12 ข้อความ อาจหยุดก่อนเมื่อพบความเสี่ยง</small></div><div class="progress-track"><i id="progress-fill"></i></div></div>
+    <div class="interview-progress"><div><span id="question-progress">กำลังเริ่มต้น</span><small>ถามเฉพาะข้อมูลที่จำเป็น จบเมื่อข้อมูลพอหรือควรส่งต่อเจ้าหน้าที่</small></div><div class="progress-track"><i id="progress-fill"></i></div></div>
     <div class="chat-disclaimer"><span>i</span> ตอบเฉพาะข้อมูลสุขภาพ โปรดอย่าใส่ชื่อ เบอร์โทร เลขบัตร หรือที่อยู่</div>
     <div id="case-status" class="case-status status-collecting" aria-live="polite"><strong>กำลังซักประวัติ</strong><span>ระบบกำลังรวบรวมข้อมูลเพื่อจัดทำสรุปให้บุคลากรตรวจ</span></div>
-    <section id="staff-review-result" class="appointment-panel" aria-live="polite" hidden><span class="eyebrow">เจ้าหน้าที่ประเมินแล้ว</span><h2 id="staff-review-urgency"></h2><p id="staff-review-guidance"></p><p class="appointment-muted">หน้านี้ตรวจผลใหม่ทุก 15 วินาทีขณะเปิดอยู่ การประเมินไม่ใช่การยืนยันนัด</p></section>
-    <section id="appointment-referral" class="appointment-panel" hidden>
-      <span class="eyebrow">นัดหมายแพทย์</span><h2 id="referral-label"></h2><p id="referral-reason"></p>
-      <p class="appointment-muted">ทุกเคสไปต่อที่การนัดได้ ระบบเลือกแผนกให้ หรือส่งคำขอให้เจ้าหน้าที่จัดนัดตามความเร่งด่วน</p>
-      <a class="button button-primary" href="{{ url_for('appointments.booking') }}" id="appointment-next-link">นัดหมาย →</a>
-    </section>
-    <section id="appointment-request-result" class="appointment-panel" hidden aria-live="polite"><h2>สถานะคำขอนัด</h2><p id="appointment-request-text"></p><a class="button button-primary" href="{{ url_for('appointments.booking') }}">ดูรายละเอียดนัด →</a></section>
     <div id="messages" class="messages" aria-live="polite"></div>
     <div id="typing-indicator" class="typing-indicator" hidden><i></i><i></i><i></i><span>กำลังจัดคำถามถัดไป</span></div>
     <p id="chat-notice" class="appointment-muted" role="status" hidden></p>
@@ -76,6 +69,16 @@
       <button class="send-button" type="submit" aria-label="ส่งคำตอบ"><span>ส่ง</span> →</button>
     </form>
     <div id="chat-error" class="form-error" role="alert" hidden></div>
+    <div id="next-care-step">
+    <section id="staff-review-result" class="appointment-panel" aria-live="polite" hidden><span class="eyebrow">เจ้าหน้าที่ประเมินแล้ว</span><h2 id="staff-review-urgency"></h2><p id="staff-review-guidance"></p><p class="appointment-muted">หน้านี้ตรวจผลใหม่ทุก 15 วินาทีขณะเปิดอยู่ การประเมินไม่ใช่การยืนยันนัด</p></section>
+    <section id="appointment-referral" class="appointment-panel" hidden>
+      <span class="eyebrow">นัดหมายแพทย์</span><h2 id="referral-label"></h2><p id="referral-reason"></p>
+      <p class="appointment-muted">ทุกเคสไปต่อที่การนัดได้ ระบบเลือกแผนกให้ หรือส่งคำขอให้เจ้าหน้าที่จัดนัดตามความเร่งด่วน</p>
+      <a class="button button-primary" href="tel:1669" id="emergency-next-link" hidden>โทร 1669 · ไม่รอคิวนัด</a>
+      <a class="button button-primary" href="{{ url_for('appointments.booking') }}" id="appointment-next-link">นัดหมาย →</a>
+    </section>
+    <section id="appointment-request-result" class="appointment-panel" hidden aria-live="polite"><h2>สถานะคำขอนัด</h2><p id="appointment-request-text"></p><a class="button button-primary" href="{{ url_for('appointments.booking') }}">ดูรายละเอียดนัด →</a></section>
+    </div>
   </section>
 
   <aside class="intake-aside">
@@ -85,4 +88,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='12') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='intake.js', v='13') }}" defer></script>{% endblock %}
