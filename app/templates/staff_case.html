@@ -17,7 +17,7 @@
     <p class="ai-note">{{ display.note }}</p>
     <p>ช่องที่ AI ยังไม่มีข้อสรุปพร้อมหลักฐาน จะแสดงข้อความผู้ใช้ที่อาจเกี่ยวข้องตามต้นฉบับเพื่อให้เจ้าหน้าที่ตรวจ ข้อความเหล่านี้ไม่ใช่การวินิจฉัย และอาจมีคำตอบที่เปลี่ยนแปลงภายหลัง</p>
     <dl class="summary-list">
-      <dt>อาการสำคัญ</dt><dd>{{ case.chief_complaint }}<small>ข้อมูลตั้งต้นจากผู้รับบริการ</small></dd>
+      <dt>อาการสำคัญ</dt><dd>{{ case.chief_complaint }}<br><small>ข้อมูลตั้งต้นจากผู้รับบริการ</small></dd>
       {% for row in display.rows %}
       <dt>{{ row.label }}</dt>
       <dd data-summary-field="{{ row.field }}" data-summary-source="{{ row.source }}">
@@ -27,7 +27,7 @@
         {% if row.quotes %}<details {{ 'open' if not row.value else '' }}><summary>{{ 'ข้อความต้นฉบับที่อาจเกี่ยวข้อง' if not row.value else 'ข้อความต้นฉบับที่ AI อ้างอิง' }}</summary>{% for quote in row.quotes %}<blockquote>{{ quote }}</blockquote>{% endfor %}</details>{% endif %}
       </dd>
       {% endfor %}
-      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ display.pregnancy }}<small>ข้อมูลจากแบบฟอร์มเบื้องต้น</small></dd>
+      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ display.pregnancy }}<br><small>ข้อมูลจากแบบฟอร์มเบื้องต้น</small></dd>
       <dt>ข้อมูลสำคัญที่ AI ระบุว่ายังขาด</dt><dd>{{ display.missing|join(', ') if display.missing else ('AI ไม่ได้ระบุรายการเพิ่มเติม ไม่ใช่การรับรองว่าข้อมูลครบ' if display.mode == 'ai' else 'ยังไม่ได้ประเมินโดย AI') }}</dd>
     </dl>
   </section>
