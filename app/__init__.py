@@ -78,12 +78,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         return response
 
     from .case_display import summary_is_current
+    from .summary_display import summary_display
 
     @app.context_processor
     def inject_branding():
         return {
             "clinic_name": app.config["CLINIC_NAME"],
             "summary_is_current": summary_is_current,
+            "summary_display": summary_display,
             "privacy_contact": app.config["PRIVACY_CONTACT"],
         }
 

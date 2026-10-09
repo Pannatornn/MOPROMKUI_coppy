@@ -11,30 +11,25 @@
 
 <div class="review-grid">
   <section class="review-card summary-card">
-    <div class="card-heading"><div><span class="eyebrow">AI SUMMARY</span><h2>สรุปสำหรับบุคลากร</h2></div><span class="review-required">ต้องตรวจทาน</span></div>
-    {% set s = case.ai_summary or {} %}
-    {% if s and not summary_is_current(case) %}<p class="ai-note" role="alert">สรุปนี้ไม่ครอบคลุมข้อความผู้ใช้ล่าสุด หรือเป็นสรุปรุ่นเดิมที่ยังยืนยันขอบเขตไม่ได้ กรุณาอ่านบทสนทนาต้นฉบับก่อนประเมิน</p>{% endif %}
+    {% set display = summary_display(case) %}
+    <div class="card-heading"><div><span class="eyebrow">{{ 'AI SUMMARY' if display.mode == 'ai' else 'PATIENT INFORMATION' }}</span><h2>{{ display.title }}</h2></div><span class="review-required">ต้องตรวจทาน</span></div>
+    {% if case.ai_summary and not summary_is_current(case) %}<p class="ai-note" role="alert">สรุปนี้ไม่ครอบคลุมข้อความผู้ใช้ล่าสุด หรือเป็นสรุปรุ่นเดิมที่ยังยืนยันขอบเขตไม่ได้ กรุณาอ่านบทสนทนาต้นฉบับก่อนประเมิน</p>{% endif %}
+    <p class="ai-note">{{ display.note }}</p>
+    <p>ช่องที่ AI ยังไม่มีข้อสรุปพร้อมหลักฐาน จะแสดงข้อความผู้ใช้ที่อาจเกี่ยวข้องตามต้นฉบับเพื่อให้เจ้าหน้าที่ตรวจ ข้อความเหล่านี้ไม่ใช่การวินิจฉัย และอาจมีคำตอบที่เปลี่ยนแปลงภายหลัง</p>
     <dl class="summary-list">
-      <dt>อาการสำคัญ</dt><dd>{{ s.get('chief_complaint', case.chief_complaint) }}</dd>
-      <dt>เริ่มและดำเนินอาการ</dt><dd>{{ s.get('onset_and_course', 'ยังไม่ได้ข้อมูล') }}</dd>
-      <dt>ตำแหน่ง/ลักษณะ</dt><dd>{{ s.get('symptom_location_and_character', 'ยังไม่ได้ข้อมูล') }}</dd>
-      <dt>ความรุนแรง/ผลกระทบ</dt><dd>{{ s.get('severity_and_impact', 'ยังไม่ได้ข้อมูล') }}</dd>
-      <dt>ปัจจัยกระตุ้น/บรรเทา</dt><dd>{{ (s.get('aggravating_and_relieving_factors') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>อาการร่วม</dt><dd>{{ (s.get('associated_symptoms') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>โรคและประวัติสำคัญ</dt><dd>{{ (s.get('relevant_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>ผ่าตัด/นอนโรงพยาบาล</dt><dd>{{ (s.get('past_procedures_or_hospitalizations') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>ยาและอาหารเสริม</dt><dd>{{ (s.get('current_medications') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>การแพ้</dt><dd>{{ (s.get('allergies') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>ประวัติครอบครัว</dt><dd>{{ (s.get('family_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>สังคม/การสัมผัส</dt><dd>{{ (s.get('social_and_exposure_history') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>เดินทาง/ผู้สัมผัสป่วย</dt><dd>{{ (s.get('travel_and_sick_contacts') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>ค่าสัญญาณชีพ</dt><dd>{{ (s.get('vital_signs_if_known') or []) | join(', ') or 'ยังไม่ได้ข้อมูล' }}</dd>
-      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ {'pregnant':'ตั้งครรภ์', 'possibly_pregnant':'อาจตั้งครรภ์', 'not_pregnant':'ไม่ได้ตั้งครรภ์', 'not_applicable':'ไม่เกี่ยวข้อง', 'unknown':'ไม่ทราบ'}.get(s.get('pregnancy_context'), s.get('pregnancy_context', 'ยังไม่ได้ข้อมูล')) }}</dd>
-      <dt>ความกังวลของผู้รับบริการ</dt><dd>{{ s.get('patient_concerns', 'ยังไม่ได้ข้อมูล') }}</dd>
-      <dt>ข้อมูลที่ยังขาด</dt><dd>{{ (s.get('missing_critical_information') or []) | join(', ') or '—' }}</dd>
+      <dt>อาการสำคัญ</dt><dd>{{ case.chief_complaint }}<small>ข้อมูลตั้งต้นจากผู้รับบริการ</small></dd>
+      {% for row in display.rows %}
+      <dt>{{ row.label }}</dt>
+      <dd data-summary-field="{{ row.field }}" data-summary-source="{{ row.source }}">
+        {% if row.value %}{{ row.value }}
+        {% elif row.quotes %}<strong>ข้อความผู้ใช้ · รอเจ้าหน้าที่ตรวจ</strong>
+        {% else %}ยังไม่มีข้อมูลที่จัดเข้าช่องนี้ได้ โปรดตรวจบทสนทนาต้นฉบับ{% endif %}
+        {% if row.quotes %}<details {{ 'open' if not row.value else '' }}><summary>{{ 'ข้อความต้นฉบับที่อาจเกี่ยวข้อง' if not row.value else 'ข้อความต้นฉบับที่ AI อ้างอิง' }}</summary>{% for quote in row.quotes %}<blockquote>{{ quote }}</blockquote>{% endfor %}</details>{% endif %}
+      </dd>
+      {% endfor %}
+      <dt>การตั้งครรภ์/ประจำเดือน</dt><dd>{{ display.pregnancy }}<small>ข้อมูลจากแบบฟอร์มเบื้องต้น</small></dd>
+      <dt>ข้อมูลสำคัญที่ AI ระบุว่ายังขาด</dt><dd>{{ display.missing|join(', ') if display.missing else ('AI ไม่ได้ระบุรายการเพิ่มเติม ไม่ใช่การรับรองว่าข้อมูลครบ' if display.mode == 'ai' else 'ยังไม่ได้ประเมินโดย AI') }}</dd>
     </dl>
-    {% if s.get('evidence') %}<details><summary>ข้อความผู้ใช้ที่อ้างอิงในสรุป</summary>{% for item in s.evidence %}<p><strong>{{ item.field }}</strong>: {{ item.quotes|join(' / ') }}</p>{% endfor %}</details>{% endif %}
-    <p class="ai-note">สรุปนี้สร้างโดย AI และอาจผิดพลาด ต้องตรวจเทียบกับบทสนทนาต้นฉบับทุกครั้ง</p>
   </section>
 
   <aside class="review-sidebar">
