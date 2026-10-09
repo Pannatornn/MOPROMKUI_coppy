@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: testing
+      AI_PROVIDER: stub
+      DATABASE_URL: "sqlite:///:memory:"
+      RATELIMIT_STORAGE_URI: "memory://"
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
+      STAFF_PASSWORD: ""
+      STAFF_PASSWORD_HASH: ""
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run all tests
+        run: python -m pytest -v -ra --tb=long --junitxml=test-results/pytest.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: test-results/pytest.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Report CI failure
+        if: failure()
+        run: |
+          echo "::error::CI failed. Check the failed step above for dependency errors or pytest tracebacks."
+          echo "## CI failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Check the failed step logs for details. If pytest produced a report, download the pytest-results artifact." >> "$GITHUB_STEP_SUMMARY"
